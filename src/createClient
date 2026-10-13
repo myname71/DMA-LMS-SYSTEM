@@ -1,13 +1,14 @@
+// Supabase client — use environment variables. Do NOT commit real keys to the repository.
+// Fill SUPABASE_URL and SUPABASE_API_KEY (or SUPABASE_KEY) in your .env or Hostinger environment.
+
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = process.env.SUPABASE_URL || '';
-const supabaseKey = process.env.SUPABASE_API_KEY || process.env.SUPABASE_KEY || '';
+const SUPABASE_URL = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+const SUPABASE_KEY = process.env.SUPABASE_API_KEY || process.env.SUPABASE_KEY || '';
 
-if (!supabaseUrl || !supabaseKey) {
-  console.warn(
-    '[supabase] Missing SUPABASE_URL or SUPABASE_API_KEY/SUPABASE_KEY. Set the values in your environment before using the client.'
-  );
+if (!SUPABASE_URL || !SUPABASE_KEY) {
+  console.warn('[supabase] SUPABASE_URL or SUPABASE_KEY is not set. The client may fail.');
 }
 
-export const supabase = createClient(supabaseUrl, supabaseKey);
+export const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 export default supabase;
