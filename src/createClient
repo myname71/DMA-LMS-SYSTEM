@@ -1,4 +1,13 @@
-import { createClient } from '@supabase/supabase-js'
-const supabaseUrl = 'https://alqdpisuozxbddcxcgrz.supabase.co'
-const supabaseKey = process.env.SUPABASE_KEY
-const supabase = createClient(https://alqdpisuozxbddcxcgrz.supabase.co, sb_publishable_QHIawrgJIZ6HKs9zILDlsA_kY2S6VRK)
+import { createClient } from '@supabase/supabase-js';
+
+const supabaseUrl = process.env.SUPABASE_URL || '';
+const supabaseKey = process.env.SUPABASE_API_KEY || process.env.SUPABASE_KEY || '';
+
+if (!supabaseUrl || !supabaseKey) {
+  console.warn(
+    '[supabase] Missing SUPABASE_URL or SUPABASE_API_KEY/SUPABASE_KEY. Set the values in your environment before using the client.'
+  );
+}
+
+export const supabase = createClient(supabaseUrl, supabaseKey);
+export default supabase;
