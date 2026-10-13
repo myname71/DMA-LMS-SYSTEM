@@ -159,122 +159,42 @@ CREATE TABLE payments (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-{
-    /**
-     * Get published courses with relationship metrics.
-     */
-    public function index(Request $request)
-    {
-        $courses = Course::with(['instructor:id,name,avatar_url', 'category'])
-            ->where('is_published', true)
-            ->when($request->query('category'), function($query, $cat) {
-                return $query->whereHas('category', function($q) use ($cat) {
-                    $q->where('slug', $cat);
-                });
-            })
-            ->withCount('students')
-            ->get();
 
-        return response()->json([
-            'status' => 'success',
-            'courses' => $courses
-        ], 200);
-    }
+NODE.JS / EXPRESS API EXAMPLES
 
-    /**
-     * Course Creation Wizard (Role: Super_Admin / Instructor/admin)
-     */
-    public function store(Request $request)
-    {
-        $validator = Validator::make($request->all(), [
-            'title' => 'required|string|max:255',
-            'headline' => 'required|string',
-            'description' => 'required|string',
-            'price' => 'required|numeric|min:0',
-            'category_id' => 'required|exists:categories,id',
-            'thumbnail' => 'image|mimes:jpeg,png,webp|max:5120' // Max 5MB
-        ]);
+1. GET PUBLISHED COURSES
+Example Express route (adapt the query to your database client):
 
-        if ($validator->fails()) {
-            return response()->json(['errors' => $validator->errors()], 422);
-        }
+router.get('/courses', async (req, res, next) => {
+  try {
+    const category = req.query.category;
+    const result = category
+      ? await db.query(
+          'SELECT c.* FROM courses c JOIN categories cat ON cat.id = c.category_id WHERE c.is_published = TRUE AND cat.slug = $1',
+          [category]
+        )
+      : await db.query(
+          'SELECT * FROM courses WHERE is_published = TRUE'
+        );
 
-        $user = Auth::user();
-        if ($user->role !== 'instructor' && $user->role !== 'admin' && $user->role !== 'super_admin') {
-            return response()->json(['error' => 'Unverified capability permissions.'], 403);
-        }
+    res.status(200).json({ status: 'success', courses: result.rows });
+  } catch (error) {
+    next(error);
+  }
+});
 
-        $thumbnailPath = 'default_thumbnail.png';
-        if ($request->hasFile('thumbnail')) {
-            $thumbnailPath = $request->file('thumbnail')->store('thumbnails', 's3');
-        }
+2. COURSE CREATION
+Validate request fields on the server and enforce permissions using your Node.js authentication middleware before inserting a course. Use parameterized SQL queries (or your configured ORM) to prevent SQL injection. Store uploaded thumbnails in your configured storage provider and save the resulting URL in thumbnail_url.
 
-        $course = Course::create([
-            'title' => $request->title,
-            'slug' => \\Str::slug($request->title),
-            'headline' => $request->headline,
-            'description' => $request->description,
-            'level' => $request->level ?? 'Intermediate',
-            'duration' => $request->duration ?? '12 Hours',
-            'price' => $request->price,
-            'thumbnail_url' => $thumbnailPath,
-            'instructor_id' => $user->id,
-            'category_id' => $request->category_id,
-            'is_published' => true
-        ]);
+3. LEARNING PROGRESS
+Verify that the authenticated student is enrolled in the course and that the lesson belongs to that course. Save lesson completion in lesson_progress, recalculate progress_percent from completed versus total lessons, and issue a certificate only when all required lessons are complete. Use a database transaction to keep related updates consistent.
 
-        return response()->json([
-            'status' => 'success',
-            'message' => 'LMS Course published successfully',
-            'course' => $course
-        ], 201);
-    }
+4. SECURITY NOTES
+- Do not trust role names or user IDs supplied by the browser; derive the user from verified server-side authentication.
+- Validate and authorize every course, lesson, enrollment, and certificate operation.
+- Never store plaintext passwords; use a suitable password-hashing library.
+- Keep database credentials and JWT secrets in server-side environment variables.
 
-    /**
-     * Progress Tracking Synchronization
-     */
-    public function syncProgress(Request $request)
-    {
-        $student = Auth::user();
-        $validator = Validator::make($request->all(), [
-            'course_id' => 'required|exists:courses,id',
-            'completed_lesson_id' => 'required|exists:lessons,id'
-        ]);
-
-        if ($validator->fails()) {
-            return response()->json($validator->errors(), 400);
-        }
-
-        $enrollment = Enrollment::firstOrCreate([
-            'user_id' => $student->id,
-            'course_id' => $request->course_id
-        ]);
-
-        // Connect lesson to progress cross tables
-        $enrollment->completedLessons()->syncWithoutDetaching([$request->completed_lesson_id]);
-
-        // Calculate and auto update overall progress
-        $totalLessons = $enrollment->course->lessons()->count();
-        $doneLessons = $enrollment->completedLessons()->count();
-        $progress = min(100, (int) (($doneLessons / max(1, $totalLessons)) * 100));
-
-        $enrollment->update(['progress_percent' => $progress]);
-
-        // Automatically trigger certificate generator on 100% completion
-        if ($progress >= 100 && !$enrollment->completed_at) {
-            $enrollment->update(['completed_at' => now()]);
-            $certificate = $enrollment->certificate()->create([
-                'credential_uuid' => \\Str::uuid()
-            ]);
-        }
-
-        return response()->json([
-            'status' => 'success',
-            'progress' => $progress,
-            'certified' => ($progress >= 100)
-        ], 200);
-    }
-}
 `;
 
 export const HOSTING_OPTIMIZATION = `
