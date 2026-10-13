@@ -1,0 +1,37 @@
+{
+  "name": "DMA Academy — Digital Manufacturing",
+  "short_name": "DMA Academy",
+  "description": "British Council-funded BCU-AIUB Digital Manufacturing Academy. Industry 4.0 certification portal.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#0f172a",
+  "orientation": "portrait-primary",
+  "scope": "/",
+  "lang": "en",
+  "icons": [
+    {
+      "src": "/dma-logo.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/dma-logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "screenshots": [],
+  "categories": ["education", "productivity"],
+  "shortcuts": [
+    {
+      "name": "My Courses",
+      "short_name": "Courses",
+      "description": "Go to your enrolled courses",
+      "url": "/?page=courses",
+      "icons": [{ "src": "/dma-logo.png", "sizes": "192x192" }]
+    }
+  ]
+}

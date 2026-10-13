@@ -1,0 +1,78 @@
+{
+  "name": "digital-manufacturing-academy",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "engines": {
+    "node": ">=20.0.0",
+    "npm": ">=10.0.0"
+  },
+  "scripts": {
+    "dev": "tsx server.ts",
+    "build": "npm run clean && prisma generate && vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs",
+    "start": "node dist/server.cjs",
+    "clean": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\"",
+    "lint": "tsc --noEmit",
+    "db:push": "prisma db push",
+    "db:seed": "tsx prisma/seed.ts",
+    "db:generate": "prisma generate",
+    "postinstall": "prisma generate",
+    "test": "tsx --test tests/*.test.ts"
+  },
+  "dependencies": {
+    "@google/genai": "^2.4.0",
+    "@prisma/client": "^5.22.0",
+    "@supabase/supabase-js": "^2.0.0",
+    "@tailwindcss/vite": "^4.1.14",
+    "@types/nodemailer": "^8.0.1",
+    "@vitejs/plugin-react": "^5.0.4",
+    "bcryptjs": "^3.0.3",
+    "cookie-parser": "^1.4.7",
+    "dotenv": "^17.2.3",
+    "express": "^4.21.2",
+    "jsonwebtoken": "^9.0.3",
+    "lucide-react": "^0.546.0",
+    "motion": "^12.23.24",
+    "nodemailer": "^10.0.13",
+    "prisma": "^5.22.0",
+    "react": "^19.0.1",
+    "react-dom": "^19.0.1"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/cookie-parser": "^1.4.10",
+    "@types/express": "^4.17.21",
+    "@types/jsonwebtoken": "^9.0.10",
+    "@types/node": "^22.14.0",
+    "autoprefixer": "^10.4.21",
+    "esbuild": "^0.28.1",
+    "supabase": "^2.120.0",
+    "tailwindcss": "^4.1.14",
+    "tsx": "^4.21.0",
+    "typescript": "^5.8.2",
+    "vite": "^6.2.3"
+  },
+  "description": "Digital Manufacturing Academy — British Council funded LMS platform. BCU & AIUB partnership.",
+  "keywords": [
+    "lms",
+    "digital-manufacturing",
+    "elearning",
+    "industry4.0"
+  ],
+  "author": "Digital Manufacturing Academy",
+  "license": "UNLICENSED",
+  "overrides": {
+    "esbuild": "^0.28.1",
+    "proxy-addr": "2.0.8",
+    "source-map-js": "1.2.2"
+  },
+  "allowScripts": {
+    "@google/genai@2.4.0": true,
+    "@prisma/client@5.22.0": true,
+    "@prisma/engines@5.22.0": true,
+    "@tailwindcss/oxide@4.1.14": true,
+    "esbuild@0.28.2": true,
+    "prisma@5.22.0": true,
+    "protobufjs@7.6.6": true
+  }
+}

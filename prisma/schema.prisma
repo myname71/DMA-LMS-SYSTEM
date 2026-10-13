@@ -1,0 +1,396 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+// ─── App Users ────────────────────────────────────────────────────────────────
+model AppUser {
+  id               String   @id @default(cuid()) @db.VarChar(100)
+  name             String   @db.VarChar(255)
+  email            String   @unique @db.VarChar(255)
+  password         String?  @db.VarChar(255)
+  role             String   @default("student") @db.VarChar(50)
+  isApproved       Boolean  @default(true)  @map("is_approved")
+  suspended        Boolean  @default(false)
+  subscriptionPlan String   @default("free") @map("subscription_plan") @db.VarChar(50)
+  avatar           String?  @db.Text
+  bio              String?  @db.Text
+  specialization   String?  @db.VarChar(255)
+  joinedAt         String?  @map("joined_at") @db.VarChar(50)
+  customRoleId     String?  @map("custom_role_id") @db.VarChar(100)
+  qualificationDoc     String?  @map("qualification_doc") @db.Text
+  phone                String?  @db.VarChar(30)
+  qualifications       Json?
+  badges               Json?
+  mustChangePassword   Boolean  @default(false) @map("must_change_password")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+
+  @@map("app_users")
+}
+
+// ─── App Courses (lessons & quizzes embedded as JSON) ────────────────────────
+model AppCourse {
+  id              String   @id @default(cuid()) @db.VarChar(100)
+  title           String   @db.VarChar(512)
+  headline        String?  @db.Text
+  description     String?  @db.Text
+  category        String?  @db.VarChar(100)
+  level           String?  @db.VarChar(50)
+  duration        String?  @db.VarChar(50)
+  instructorId    String?  @map("instructor_id")    @db.VarChar(100)
+  instructorName  String?  @map("instructor_name")  @db.VarChar(255)
+  price           Float    @default(0)
+  isFree          Boolean  @default(false) @map("is_free")
+  image           String?  @db.Text
+  lessons         Json     @default("[]")
+  quizzes         Json     @default("[]")
+  assignments     Json     @default("[]")
+  isPublished     Boolean  @default(false) @map("is_published")
+  approvalStatus  String   @default("approved") @map("approval_status") @db.VarChar(50)
+  rejectionReason String?  @map("rejection_reason") @db.Text
+  enrollmentCount Int      @default(0) @map("enrollment_count")
+  ratingAverage   Float    @default(0) @map("rating_average")
+  createdAt       String?  @map("created_at") @db.VarChar(50)
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@map("app_courses")
+}
+
+// ─── App Enrollments ─────────────────────────────────────────────────────────
+model AppEnrollment {
+  id               String   @id @default(cuid()) @db.VarChar(100)
+  userId           String   @map("user_id")   @db.VarChar(100)
+  courseId         String   @map("course_id") @db.VarChar(100)
+  progress         Int      @default(0)
+  completedLessons Json     @default("[]") @map("completed_lessons")
+  quizAttempts     Json     @default("{}") @map("quiz_attempts")
+  enrolledAt       String?  @map("enrolled_at")  @db.VarChar(50)
+  completedAt      String?  @map("completed_at") @db.VarChar(50)
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  @@unique([userId, courseId])
+  @@index([userId])
+  @@map("app_enrollments")
+}
+
+// ─── App Messages ────────────────────────────────────────────────────────────
+model AppMessage {
+  id         String   @id @default(cuid()) @db.VarChar(100)
+  fromUserId String?  @map("from_user_id") @db.VarChar(100)
+  toUserId   String?  @map("to_user_id")   @db.VarChar(100)
+  fromName   String?  @map("from_name")    @db.VarChar(255)
+  toName     String?  @map("to_name")      @db.VarChar(255)
+  fromRole   String?  @map("from_role")    @db.VarChar(50)
+  subject    String?  @db.VarChar(512)
+  body       String   @db.Text
+  isRead     Boolean  @default(false) @map("is_read")
+  createdAt  String?  @map("created_at") @db.VarChar(50)
+
+  @@index([toUserId])
+  @@map("app_messages")
+}
+
+// ─── App Certificates ────────────────────────────────────────────────────────
+model AppCertificate {
+  id        String   @id @default(cuid()) @db.VarChar(100)
+  userId    String   @map("user_id")   @db.VarChar(100)
+  courseId  String   @map("course_id") @db.VarChar(100)
+  certId    String   @map("cert_id")   @db.VarChar(100)
+  issuedAt  String?  @map("issued_at") @db.VarChar(50)
+
+  @@index([userId])
+  @@map("app_certificates")
+}
+
+// ─── App Logs ────────────────────────────────────────────────────────────────
+model AppLog {
+  id        String   @id @default(cuid()) @db.VarChar(100)
+  text      String   @db.Text
+  type      String?  @db.VarChar(100)
+  userId    String?  @map("user_id") @db.VarChar(100)
+  time      String?  @db.VarChar(50)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([createdAt(sort: Desc)])
+  @@map("app_logs")
+}
+
+// ─── App Invites ─────────────────────────────────────────────────────────────
+model AppInvite {
+  id        String   @id @default(cuid()) @db.VarChar(100)
+  email     String   @db.VarChar(255)
+  role      String   @db.VarChar(50)
+  token     String   @unique @db.VarChar(255)
+  status    String   @default("pending") @db.VarChar(50)
+  createdAt String?  @map("created_at") @db.VarChar(50)
+
+  @@map("app_invites")
+}
+
+// ─── App Custom Roles ────────────────────────────────────────────────────────
+model AppCustomRole {
+  id          String   @id @default(cuid()) @db.VarChar(100)
+  name        String   @db.VarChar(255)
+  description String?  @db.Text
+  permissions Json     @default("[]")
+  createdAt   String?  @map("created_at") @db.VarChar(50)
+
+  @@map("app_custom_roles")
+}
+
+// ─── App Media Library ────────────────────────────────────────────────────────
+model AppMediaItem {
+  id         String   @id @default(cuid()) @db.VarChar(100)
+  name       String   @db.VarChar(512)
+  dataUrl    String?  @map("data_url") @db.Text
+  type       String?  @db.VarChar(100)
+  usedAs     String?  @map("used_as") @db.VarChar(100)
+  uploadedAt String?  @map("uploaded_at") @db.VarChar(50)
+
+  @@map("app_media_items")
+}
+
+// ─── App Bank Accounts ───────────────────────────────────────────────────────
+model AppBankAccount {
+  id            String   @id @default(cuid()) @db.VarChar(100)
+  instructorId  String   @map("instructor_id") @db.VarChar(100)
+  bankName      String   @map("bank_name")      @db.VarChar(255)
+  accountName   String   @map("account_name")   @db.VarChar(255)
+  accountNumber String   @map("account_number") @db.VarChar(100)
+  routingCode   String?  @map("routing_code")   @db.VarChar(100)
+  country       String?  @db.VarChar(100)
+
+  @@index([instructorId])
+  @@map("app_bank_accounts")
+}
+
+// ─── App Withdrawal Requests ─────────────────────────────────────────────────
+model AppWithdrawalRequest {
+  id             String   @id @default(cuid()) @db.VarChar(100)
+  instructorId   String   @map("instructor_id")   @db.VarChar(100)
+  instructorName String?  @map("instructor_name") @db.VarChar(255)
+  amount         Float
+  status         String   @default("pending") @db.VarChar(50)
+  createdAt      String?  @map("created_at") @db.VarChar(50)
+
+  @@index([instructorId])
+  @@map("app_withdrawal_requests")
+}
+
+// ─── App Assignment Submissions ──────────────────────────────────────────────
+model AppAssignmentSubmission {
+  id              String   @id @default(cuid()) @db.VarChar(100)
+  assignmentId    String?  @map("assignment_id")    @db.VarChar(100)
+  courseId        String?  @map("course_id")        @db.VarChar(100)
+  assignmentTitle String?  @map("assignment_title") @db.VarChar(512)
+  courseName      String?  @map("course_name")      @db.VarChar(512)
+  studentId       String?  @map("student_id")       @db.VarChar(100)
+  studentName     String?  @map("student_name")     @db.VarChar(255)
+  text            String   @db.Text
+  fileUrl         String?  @map("file_url") @db.Text
+  grade           String?  @db.VarChar(50)
+  feedback        String?  @db.Text
+  submittedAt     String?  @map("submitted_at") @db.VarChar(50)
+  gradedAt        String?  @map("graded_at")    @db.VarChar(50)
+  gradedBy        String?  @map("graded_by")    @db.VarChar(100)
+
+  @@index([courseId])
+  @@index([studentId])
+  @@map("app_assignment_submissions")
+}
+
+// ─── App Webinar / Platform Posts ────────────────────────────────────────────
+model AppWebinarPost {
+  id         String   @id @default(cuid()) @db.VarChar(100)
+  title      String   @db.VarChar(512)
+  content    String   @db.Text
+  type       String?  @db.VarChar(50)
+  authorId   String?  @map("author_id")   @db.VarChar(100)
+  authorName String?  @map("author_name") @db.VarChar(255)
+  authorRole String?  @map("author_role") @db.VarChar(50)
+  tags       Json     @default("[]")
+  createdAt  String?  @map("created_at") @db.VarChar(50)
+  pinned     Boolean  @default(false)
+  views      Int      @default(0)
+
+  @@map("app_webinar_posts")
+}
+
+// ─── App Quiz Attempts ───────────────────────────────────────────────────────
+model AppQuizAttempt {
+  id          String   @id @default(cuid()) @db.VarChar(100)
+  userId      String   @map("user_id")   @db.VarChar(100)
+  courseId    String?  @map("course_id") @db.VarChar(100)
+  quizId      String?  @map("quiz_id")   @db.VarChar(100)
+  score       Float
+  passed      Boolean  @default(false)
+  attemptedAt String?  @map("attempted_at") @db.VarChar(50)
+
+  @@index([userId])
+  @@map("app_quiz_attempts")
+}
+
+// ─── App Learning Paths ──────────────────────────────────────────────────────
+model AppLearningPath {
+  id               String   @id @default(cuid()) @db.VarChar(100)
+  title            String   @db.VarChar(512)
+  description      String?  @db.Text
+  category         String?  @db.VarChar(100)
+  courses          Json     @default("[]")
+  instructorId     String?  @map("instructor_id")   @db.VarChar(100)
+  instructorName   String?  @map("instructor_name") @db.VarChar(255)
+  badge            String?  @db.VarChar(255)
+  enrolledStudents Json     @default("[]") @map("enrolled_students")
+  createdAt        String?  @map("created_at") @db.VarChar(50)
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  @@map("app_learning_paths")
+}
+
+// ─── App Events ──────────────────────────────────────────────────────────────
+model AppEvent {
+  id        String   @id @default(cuid()) @db.VarChar(100)
+  title     String   @db.VarChar(512)
+  date      String?  @db.VarChar(50)
+  time      String?  @db.VarChar(20)
+  host      String?  @db.VarChar(255)
+  type      String?  @db.VarChar(100)
+  desc      String?  @db.Text
+  category  String?  @db.VarChar(100)
+  attendees Json     @default("[]")
+  createdAt String?  @map("created_at") @db.VarChar(50)
+
+  @@map("app_events")
+}
+
+// ─── App CMS Content ─────────────────────────────────────────────────────────
+model AppCmsContent {
+  id        String   @id @default("main") @db.VarChar(20)
+  pages     Json     @default("[]")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("app_cms_content")
+}
+
+// ─── App Theme Settings ──────────────────────────────────────────────────────
+model AppThemeSetting {
+  id        String   @id @default("main") @db.VarChar(20)
+  data      Json
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("app_theme_settings")
+}
+
+// ─── App Certificate Templates ───────────────────────────────────────────────
+model AppCertTemplate {
+  id             String   @id @default(cuid()) @db.VarChar(100)
+  name           String   @db.VarChar(255)
+  style          String?  @db.VarChar(50)
+  primaryColor   String?  @map("primary_color")   @db.VarChar(20)
+  accentColor    String?  @map("accent_color")    @db.VarChar(20)
+  headerText     String?  @map("header_text")     @db.VarChar(512)
+  footerText     String?  @map("footer_text")     @db.VarChar(512)
+  signatureLabel String?  @map("signature_label") @db.VarChar(255)
+  logoEnabled    Boolean  @default(true)  @map("logo_enabled")
+  badgeEnabled   Boolean  @default(true)  @map("badge_enabled")
+  isDefault      Boolean  @default(false) @map("is_default")
+  createdAt      String?  @map("created_at") @db.VarChar(50)
+
+  @@map("app_cert_templates")
+}
+
+// ─── App Subscriptions ───────────────────────────────────────────────────────
+model AppSubscription {
+  id        String   @id @default(cuid()) @db.VarChar(100)
+  userId    String   @map("user_id") @db.VarChar(100)
+  plan      String   @db.VarChar(50)
+  status    String   @default("active") @db.VarChar(50)
+  startDate String?  @map("start_date") @db.VarChar(50)
+  endDate   String?  @map("end_date")   @db.VarChar(50)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@map("app_subscriptions")
+}
+
+// ─── App Exams (standalone exams, separate from in-course quizzes) ───────────
+model AppExam {
+  id              String   @id @default(cuid()) @db.VarChar(100)
+  title           String   @db.VarChar(512)
+  description     String?  @db.Text
+  courseId        String?  @map("course_id") @db.VarChar(100)
+  questions       Json     @default("[]")
+  passingScore    Int      @default(70)  @map("passing_score")
+  durationMinutes Int      @default(60)  @map("duration_minutes")
+  scheduledAt     String?  @map("scheduled_at")  @db.VarChar(50)
+  isPublished     Boolean  @default(false) @map("is_published")
+  createdBy       String?  @map("created_by")      @db.VarChar(100)
+  createdByName   String?  @map("created_by_name") @db.VarChar(255)
+  createdAt       String?  @map("created_at")      @db.VarChar(50)
+
+  @@index([courseId])
+  @@map("app_exams")
+}
+
+// ─── App Exam Attempts ───────────────────────────────────────────────────────
+model AppExamAttempt {
+  id          String   @id @default(cuid()) @db.VarChar(100)
+  userId      String   @map("user_id") @db.VarChar(100)
+  examId      String   @map("exam_id") @db.VarChar(100)
+  examTitle   String?  @map("exam_title") @db.VarChar(512)
+  score       Float    @default(0)
+  passed      Boolean  @default(false)
+  correct     Int      @default(0)
+  total       Int      @default(0)
+  breakdown   Json     @default("[]")
+  timeTaken   Int      @default(0) @map("time_taken")
+  attemptedAt String?  @map("attempted_at") @db.VarChar(50)
+
+  @@index([userId])
+  @@map("app_exam_attempts")
+}
+
+// ─── App Payments (bKash PGW + bank transfer) ────────────────────────────────
+model AppPayment {
+  id          String   @id @default(cuid()) @db.VarChar(100)
+  userId      String   @map("user_id") @db.VarChar(100)
+  userName    String?  @map("user_name") @db.VarChar(255)
+  plan        String   @db.VarChar(50)
+  amount      Float    @default(0)
+  currency    String   @default("BDT") @db.VarChar(10)
+  method      String   @db.VarChar(30)
+  status      String   @default("pending") @db.VarChar(30)
+  providerRef String?  @map("provider_ref") @db.VarChar(255)
+  reference   String?  @db.VarChar(255)
+  senderName  String?  @map("sender_name") @db.VarChar(255)
+  raw         Json?
+  createdAt   String?  @map("created_at")   @db.VarChar(50)
+  completedAt String?  @map("completed_at") @db.VarChar(50)
+
+  @@index([userId])
+  @@map("app_payments")
+}
+
+model AppCertDownloadHistory {
+  id           String  @id @default(cuid()) @db.VarChar(100)
+  certId       String  @map("cert_id")       @db.VarChar(100)
+  userId       String  @map("user_id")       @db.VarChar(100)
+  userName     String? @map("user_name")     @db.VarChar(255)
+  courseTitle  String? @map("course_title")  @db.VarChar(512)
+  downloadedAt String? @map("downloaded_at") @db.VarChar(50)
+
+  @@index([userId])
+  @@map("app_cert_download_history")
+}
+
+model AppStateSnapshot {
+  id        String   @id @default("main") @db.VarChar(20)
+  data      Json
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("app_state_snapshots")
+}
