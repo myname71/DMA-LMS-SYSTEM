@@ -1,8 +1,8 @@
-export const POSTGRES_SCHEMA = 
- DIGITAL MANUFACTURING ACADEMY 
- POSTGRESQL COMPLETE PRODUCTION SCHEMA
+export const POSTGRES_SCHEMA = `
+DIGITAL MANUFACTURING ACADEMY 
+POSTGRESQL COMPLETE PRODUCTION SCHEMA
 
- 1. ROLES TABLE
+1. ROLES TABLE
 CREATE TABLE roles (
     id SERIAL PRIMARY KEY,
     name VARCHAR(50) UNIQUE NOT NULL,
@@ -11,7 +11,7 @@ CREATE TABLE roles (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
- 2. USERS TABLE
+2. USERS TABLE
 CREATE TABLE users (
     id SERIAL PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
@@ -117,6 +117,7 @@ CREATE TABLE quiz_questions (
     options JSONB NOT NULL, -- Binary JSON options array
     correct_option_index INT NOT NULL
 );
+
 12. CERTIFICATES TABLE
 CREATE TABLE certificates (
     id SERIAL PRIMARY KEY,
@@ -134,6 +135,7 @@ CREATE TABLE assignments (
     max_score INT DEFAULT 100,
     due_date TIMESTAMP NULL
 );
+
 14. ASSIGNMENT SUBMISSIONS TABLE
 CREATE TABLE assignment_submissions (
     id SERIAL PRIMARY KEY,
@@ -180,7 +182,7 @@ CREATE TABLE payments (
     }
 
     /**
-     * Course Creation Wizard (Role: Super_Admin / Instructo/admin
+     * Course Creation Wizard (Role: Super_Admin / Instructor/admin)
      */
     public function store(Request $request)
     {
@@ -273,11 +275,10 @@ CREATE TABLE payments (
         ], 200);
     }
 }
+`;
 
-
-export const HOSTING_OPTIMIZATION = 
+export const HOSTING_OPTIMIZATION = `
 HOSTINGER MANAGED NODE.JS APPS & SHARED HOSTING OPTIMIZATION GUIDE
-
 
 1. CONFIGURING PASSENGERS / REVERSE PROXY
 Hostinger Managed Node.JS uses Phusion Passenger under cPanel/hPanel.
@@ -307,9 +308,9 @@ redisClient.on('error', err => console.log('Redis Cache Error', err));
 * Compile modules beforehand utilizing our production script:
   $ npm run build
   This compiles all React paths into high efficiency static HTML index pages and CJS chunks, completely preventing continuous Gulp/Vite watching overhead on small CPU tier limits memory.
+`;
 
-export const WINDOWS_LOCAL_SETUP = 
-
+export const WINDOWS_LOCAL_SETUP = `
 To set up this Enterprise LMS on your personal machine or factory intranet workstation:
 
 STEP 1: INSTALL PRE-REQUISITES
@@ -338,10 +339,10 @@ STEP 6: COMPILE Standalone Production Package
 To test ready-to-deploy IIS bundles:
   $ npm run build
   This generates 'dist/index.html' and 'dist/server.cjs' for rapid delivery.
+`;
 
-export const ARCHITECTURE_LANDSCAPE = 
+export const ARCHITECTURE_LANDSCAPE = `
 DIGITAL MANUFACTURING ACADEMY (DMA) ENTERPRISE SYSTEM ARCHITECTURE
-
 
 [1. Presentation Layer (Vite + React Canvas)]
   │
@@ -362,3 +363,4 @@ DIGITAL MANUFACTURING ACADEMY (DMA) ENTERPRISE SYSTEM ARCHITECTURE
   │
   ├─► SQL Database: fully normalized schemas, cascade deletions, JSONB options arrays
   └─► Cache layer: Redis key state storage for subscription expiration sessions
+`;
