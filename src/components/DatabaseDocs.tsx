@@ -1,21 +1,20 @@
 import React, { useState } from 'react';
 import { 
-  Database, Server, Code, HardDrive, Cpu, 
-  Terminal, FileText, CheckCircle, Download, FileCode, Copy
+  Database, HardDrive, Cpu, 
+  Terminal, CheckCircle, FileCode, Copy
 } from 'lucide-react';
 import { 
-  POSTGRES_SCHEMA, LARAVEL_CONTROLLER, 
+  POSTGRES_SCHEMA,
   HOSTING_OPTIMIZATION, WINDOWS_LOCAL_SETUP, 
   ARCHITECTURE_LANDSCAPE 
 } from '../data/dbDocsData';
 
 export default function DatabaseDocs() {
-  const [activeSegment, setActiveSegment] = useState<'schema' | 'controller' | 'hosting' | 'windows' | 'architecture'>('schema');
+  const [activeSegment, setActiveSegment] = useState<'schema' | 'hosting' | 'windows' | 'architecture'>('schema');
   const [copied, setCopied] = useState<string | null>(null);
 
   const segments = [
     { id: 'schema', label: 'Postgres SQL Schema', icon: Database, source: POSTGRES_SCHEMA },
-    { id: 'controller', label: 'Laravel Controller', icon: Code, source: LARAVEL_CONTROLLER },
     { id: 'hosting', label: 'Hostinger Node/Redis', icon: HardDrive, source: HOSTING_OPTIMIZATION },
     { id: 'windows', label: 'Windows Station Setup', icon: Terminal, source: WINDOWS_LOCAL_SETUP },
     { id: 'architecture', label: 'System Landscape', icon: Cpu, source: ARCHITECTURE_LANDSCAPE }
@@ -44,7 +43,7 @@ export default function DatabaseDocs() {
             <span>Developer Code & SQL Database Workspace</span>
           </h2>
           <p className="text-xs text-slate-400">
-            Explore fully detailed model tables, server proxies, Laravel controller routing patterns, Hostinger server deployment optimizations, and Windows offline workstation setups.
+            Explore fully detailed model tables, server proxies, Hostinger server deployment optimizations, and Windows offline workstation setups.
           </p>
         </div>
       </div>
@@ -72,7 +71,7 @@ export default function DatabaseDocs() {
                     {s.label}
                   </div>
                   <div className="text-[10px] text-slate-500 font-mono capitalize">
-                    {s.id === 'schema' ? 'Cascade constraints schemas' : s.id === 'controller' ? 'Sanctum auth APIs' : s.id === 'hosting' ? 'Phusion reverse proxy guide' : s.id === 'windows' ? 'Offline factory clone' : 'Multi-tier mapping model'}
+                    {s.id === 'schema' ? 'Cascade constraints schemas' : s.id === 'hosting' ? 'Phusion reverse proxy guide' : s.id === 'windows' ? 'Offline workstation setup' : 'System overview'}
                   </div>
                 </div>
               </button>
@@ -97,7 +96,7 @@ export default function DatabaseDocs() {
               <span className="w-3 h-3 rounded-full bg-amber-500/80" />
               <span className="w-3 h-3 rounded-full bg-teal-500/80" />
               <span className="ml-1 text-slate-500">
-                {activeSegment === 'schema' ? 'postgres_mysql_schema.sql' : activeSegment === 'controller' ? 'API_LMSCourseController.php' : activeSegment === 'hosting' ? 'hostinger_node_guide.txt' : activeSegment === 'windows' ? 'windows_install_blueprint.bat' : 'dma_architecture_landscape.pdf'}
+                {activeSegment === 'schema' ? 'postgres_mysql_schema.sql' : activeSegment === 'hosting' ? 'hostinger_node_guide.txt' : activeSegment === 'windows' ? 'windows_setup_guide.txt' : 'system_landscape.md'}
               </span>
             </div>
 
