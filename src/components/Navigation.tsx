@@ -74,14 +74,14 @@ export default function Navigation({
 
   // Map user requested core menu
   const navItems = [
-    { id: 'home', label: 'Home' },
-    { id: 'categories', label: 'Categories', isMega: true },
-    { id: 'courses', label: 'Courses' },
-    { id: 'events', label: 'Events' },
-    { id: 'webinar', label: 'Webinar' },
-    { id: 'assessment', label: 'Assess' },
-    { id: 'certificates', label: 'Certification' },
-  ];
+  { id: "home", label: "Home" },
+  { id: "categories", label: "Categories", isMega: true },
+  { id: "courses", label: "Courses" },
+  { id: "events", label: "Events" },
+  { id: "webinar", label: "Webinar" },
+  { id: "repository", label: "Repository" },
+  { id: "certificates", label: "Certification" },
+];
   const customPages = cmsPages.filter(page => !['home', 'about', 'contact'].includes(page.id));
 
   const handleRoleSwitch = (roleKey: string) => {

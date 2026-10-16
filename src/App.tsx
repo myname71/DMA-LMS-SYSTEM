@@ -8,6 +8,7 @@ import { Course, User, Enrollment, Certificate, LearningPath, SiteNotice } from 
 import { getAuthHeaders } from './lib/session';
 import Navigation from './components/Navigation';
 import LandingPage from './components/LandingPage';
+import RepositoryPage from "./components/RepositoryPage";
 // ── Route-level code splitting ────────────────────────────────────────────────
 // Only the landing shell + navigation load up front; dashboards, the course
 // player, the assessment/certificate modules and the CMS pages are fetched on
@@ -813,6 +814,9 @@ export default function App() {
             triggerToast={triggerToast}
           />
         );
+
+      case 'repository':
+        return <RepositoryPage />;
 
       case 'dbDocs':
         return <DatabaseDocs />;
