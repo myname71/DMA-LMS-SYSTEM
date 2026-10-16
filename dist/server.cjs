@@ -23,13 +23,162 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
 
 // server.ts
 var import_config2 = require("dotenv/config");
-var import_express = __toESM(require("express"), 1);
-var import_path = __toESM(require("path"), 1);
-var import_fs = __toESM(require("fs"), 1);
+var import_express2 = __toESM(require("express"), 1);
+var import_path2 = __toESM(require("path"), 1);
+var import_fs2 = __toESM(require("fs"), 1);
 var import_cookie_parser = __toESM(require("cookie-parser"), 1);
 var import_bcryptjs = __toESM(require("bcryptjs"), 1);
-var import_jsonwebtoken = __toESM(require("jsonwebtoken"), 1);
+var import_jsonwebtoken3 = __toESM(require("jsonwebtoken"), 1);
 var import_crypto = __toESM(require("crypto"), 1);
+
+// routes/repository.ts
+var import_express = require("express");
+var import_multer = __toESM(require("multer"), 1);
+var import_path = __toESM(require("path"), 1);
+var import_fs = __toESM(require("fs"), 1);
+var import_jsonwebtoken = __toESM(require("jsonwebtoken"), 1);
+
+// lib/appState.ts
+var state = {
+  users: [],
+  courses: [],
+  enrollments: [],
+  subscriptions: [],
+  certificates: [],
+  logs: [],
+  learningPaths: [],
+  events: [],
+  messages: [],
+  assignmentSubmissions: [],
+  withdrawalRequests: [],
+  bankAccounts: [],
+  cmsContent: null,
+  customRoles: [],
+  mediaLibrary: [],
+  invites: [],
+  themeSettings: null,
+  webinarPosts: [],
+  quizAttempts: [],
+  exams: [],
+  examAttempts: [],
+  certTemplates: [],
+  certDownloadHistory: [],
+  siteNotice: null
+};
+var saveState = () => {
+};
+var addLog = () => {
+};
+
+// routes/repository.ts
+var router = (0, import_express.Router)();
+var UPLOAD_DIR = import_path.default.resolve(process.cwd(), "private_uploads", "repository");
+import_fs.default.mkdirSync(UPLOAD_DIR, { recursive: true });
+var storage = import_multer.default.diskStorage({
+  destination: (_req, _file, cb) => cb(null, UPLOAD_DIR),
+  filename: (_req, file, cb) => {
+    const safe = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}${import_path.default.extname(file.originalname)}`;
+    cb(null, safe);
+  }
+});
+var upload = (0, import_multer.default)({
+  storage,
+  limits: { fileSize: 20 * 1024 * 1024 }
+  // 20 MB
+});
+function getSession(req) {
+  const raw = req.cookies?.dma_token || (req.headers.authorization?.startsWith("Bearer ") ? req.headers.authorization.slice(7) : null);
+  if (!raw) return null;
+  try {
+    const d = import_jsonwebtoken.default.verify(raw, process.env.JWT_SECRET || "");
+    return {
+      userId: d.id || d.userId,
+      email: d.email,
+      role: d.role
+    };
+  } catch {
+    return null;
+  }
+}
+router.post("/upload", upload.single("file"), (req, res) => {
+  const session = getSession(req);
+  if (!session) return res.status(401).json({ error: "Authentication required" });
+  if (!["instructor", "admin", "super_admin"].includes(session.role)) {
+    return res.status(403).json({ error: "Only instructors or admins can upload" });
+  }
+  const file = req.file;
+  if (!file) return res.status(400).json({ error: "File required (field name: file)" });
+  const { courseId, title, description } = req.body;
+  const meta = {
+    id: `repo_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+    filename: file.filename,
+    originalName: file.originalname,
+    size: file.size,
+    mime: file.mimetype,
+    uploaderId: session.userId,
+    courseId: courseId || null,
+    title: title || file.originalname,
+    description: description || "",
+    createdAt: (/* @__PURE__ */ new Date()).toISOString(),
+    path: import_path.default.relative(process.cwd(), file.path)
+  };
+  state.mediaLibrary.push(meta);
+  saveState?.();
+  addLog?.(`Repository upload: ${meta.originalName}`, "repository_upload", session.userId);
+  res.json({ status: "success", file: meta });
+});
+router.get("/list", (req, res) => {
+  const session = getSession(req);
+  if (!session) return res.status(401).json({ error: "Authentication required" });
+  const { courseId } = req.query;
+  let items = state.mediaLibrary || [];
+  if (courseId) {
+    items = items.filter((i) => i.courseId === String(courseId));
+  }
+  items = items.slice().sort((a, b) => b.createdAt > a.createdAt ? 1 : -1);
+  res.json({ items });
+});
+router.get("/:id/download", (req, res) => {
+  const session = getSession(req);
+  if (!session) return res.status(401).json({ error: "Authentication required" });
+  const id = req.params.id;
+  const item = (state.mediaLibrary || []).find((m) => m.id === id);
+  if (!item) return res.status(404).json({ error: "Resource not found" });
+  if (session.role === "admin" || session.role === "super_admin" || session.userId === item.uploaderId) {
+    const absolute2 = import_path.default.resolve(process.cwd(), item.path);
+    if (!import_fs.default.existsSync(absolute2)) return res.status(404).json({ error: "File missing" });
+    res.setHeader("Content-Disposition", `attachment; filename="${item.originalName.replace(/"/g, "")}"`);
+    res.setHeader("Content-Type", item.mime || "application/octet-stream");
+    const stream2 = import_fs.default.createReadStream(absolute2);
+    stream2.on("error", () => res.status(500).json({ error: "Error streaming file" }));
+    stream2.pipe(res);
+    addLog?.(`Repository download (admin/uploader) ${item.originalName}`, "repository_download", session.userId);
+    return;
+  }
+  if (session.role !== "student") {
+    return res.status(403).json({ error: "Only registered students can download materials" });
+  }
+  if (item.courseId) {
+    const enrolled = state.enrollments?.find(
+      (e) => e.userId === session.userId && e.courseId === item.courseId
+    );
+    if (!enrolled) {
+      return res.status(403).json({ error: "You must be enrolled in the course to download this file" });
+    }
+  }
+  const absolute = import_path.default.resolve(process.cwd(), item.path);
+  if (!import_fs.default.existsSync(absolute)) return res.status(404).json({ error: "File missing" });
+  res.setHeader("Content-Disposition", `attachment; filename="${item.originalName.replace(/"/g, "")}"`);
+  res.setHeader("Content-Type", item.mime || "application/octet-stream");
+  const stream = import_fs.default.createReadStream(absolute);
+  stream.on("error", () => res.status(500).json({ error: "Error streaming file" }));
+  stream.pipe(res);
+  addLog?.(`Repository download ${item.originalName}`, "repository_download", session.userId);
+});
+var repository_default = router;
+
+// server.ts
+var import_express_rate_limit = __toESM(require("express-rate-limit"), 1);
 var import_genai = require("@google/genai");
 
 // db.ts
@@ -61,11 +210,98 @@ function isDatabaseAvailable() {
 async function getStateFromDatabase() {
   if (!connected) return null;
   const snapshot = await prisma.appStateSnapshot.findUnique({ where: { id: "main" } });
-  return snapshot?.data && typeof snapshot.data === "object" && !Array.isArray(snapshot.data) ? snapshot.data : null;
+  if (snapshot?.data && typeof snapshot.data === "object" && !Array.isArray(snapshot.data)) {
+    return snapshot.data;
+  }
+  const [
+    users,
+    courses,
+    enrollments,
+    messages,
+    certificates,
+    logs,
+    invites,
+    customRoles,
+    mediaLibrary,
+    bankAccounts,
+    withdrawalRequests,
+    assignmentSubmissions,
+    webinarPosts,
+    quizAttempts,
+    learningPaths,
+    events,
+    subscriptions,
+    certTemplates,
+    exams,
+    examAttempts,
+    payments,
+    certDownloadHistory,
+    cmsRow,
+    themeRow
+  ] = await Promise.all([
+    prisma.appUser.findMany(),
+    prisma.appCourse.findMany(),
+    prisma.appEnrollment.findMany(),
+    prisma.appMessage.findMany(),
+    prisma.appCertificate.findMany(),
+    prisma.appLog.findMany(),
+    prisma.appInvite.findMany(),
+    prisma.appCustomRole.findMany(),
+    prisma.appMediaItem.findMany(),
+    prisma.appBankAccount.findMany(),
+    prisma.appWithdrawalRequest.findMany(),
+    prisma.appAssignmentSubmission.findMany(),
+    prisma.appWebinarPost.findMany(),
+    prisma.appQuizAttempt.findMany(),
+    prisma.appLearningPath.findMany(),
+    prisma.appEvent.findMany(),
+    prisma.appSubscription.findMany(),
+    prisma.appCertTemplate.findMany(),
+    prisma.appExam.findMany(),
+    prisma.appExamAttempt.findMany(),
+    prisma.appPayment.findMany(),
+    prisma.appCertDownloadHistory.findMany(),
+    prisma.appCmsContent.findUnique({ where: { id: "main" } }),
+    prisma.appThemeSetting.findUnique({ where: { id: "main" } })
+  ]);
+  const cmsContent = cmsRow ? Array.isArray(cmsRow.pages) ? { pages: cmsRow.pages } : cmsRow.pages : null;
+  const loadedState = {
+    users,
+    courses,
+    enrollments,
+    messages,
+    certificates,
+    logs,
+    invites,
+    customRoles,
+    mediaLibrary,
+    bankAccounts,
+    withdrawalRequests,
+    assignmentSubmissions,
+    webinarPosts,
+    quizAttempts,
+    learningPaths,
+    events,
+    subscriptions,
+    certTemplates,
+    exams,
+    examAttempts,
+    payments,
+    certDownloadHistory,
+    cmsContent,
+    themeSettings: themeRow?.data ?? null
+  };
+  if (cmsContent && typeof cmsContent === "object" && !Array.isArray(cmsContent) && "siteNotice" in cmsContent) {
+    loadedState.siteNotice = cmsContent.siteNotice ?? null;
+  }
+  const hasExistingData = Object.values(loadedState).some(
+    (value) => Array.isArray(value) ? value.length > 0 : value !== null
+  );
+  return hasExistingData ? loadedState : null;
 }
-function saveStateToDatabase(state2) {
+function saveStateToDatabase(state3) {
   if (!connected) return Promise.resolve();
-  const snapshot = JSON.parse(JSON.stringify(state2));
+  const snapshot = JSON.parse(JSON.stringify(state3));
   const write = pendingWrite.then(async () => {
     await prisma.appStateSnapshot.upsert({
       where: { id: "main" },
@@ -76,6 +312,10 @@ function saveStateToDatabase(state2) {
   pendingWrite = write.catch(() => {
   });
   return write;
+}
+async function disconnectDatabase() {
+  await pendingWrite;
+  await prisma.$disconnect();
 }
 
 // lib/mailer.ts
@@ -311,17 +551,132 @@ async function sendPasswordResetEmail(to, name, resetUrl) {
   await send(to, "DMA Academy \u2014 Reset your password", layout(body));
 }
 
+// middleware/authorize.ts
+var import_jsonwebtoken2 = __toESM(require("jsonwebtoken"), 1);
+var JWT_SECRET = process.env.JWT_SECRET || "";
+var COOKIE_NAME = process.env.COOKIE_NAME || "dma_token";
+function resolveState(source) {
+  return typeof source === "function" ? source() : source;
+}
+function getSession2(req) {
+  if (!JWT_SECRET) return null;
+  const cookieToken = req.cookies && typeof req.cookies === "object" ? req.cookies[COOKIE_NAME] : void 0;
+  const header = req.headers?.authorization;
+  const bearerToken = typeof header === "string" && header.startsWith("Bearer ") ? header.slice(7) : null;
+  const raw = cookieToken || bearerToken;
+  if (!raw) return null;
+  try {
+    const d = import_jsonwebtoken2.default.verify(raw, JWT_SECRET);
+    const userId = d.id ?? d.userId;
+    const email = d.email;
+    const role = d.role;
+    if (!userId || !email || !role) return null;
+    return { userId, email, role };
+  } catch {
+    return null;
+  }
+}
+function requireRoles(...allowed) {
+  return (req, res, next) => {
+    const s = req.session ?? getSession2(req);
+    if (!s) {
+      res.status(401).json({ error: "Authentication required" });
+      return;
+    }
+    req.session = s;
+    if (!allowed.includes(s.role)) {
+      res.status(403).json({
+        error: `Access denied. Required role: ${allowed.join(" or ")}`
+      });
+      return;
+    }
+    next();
+  };
+}
+var requireAdmin = requireRoles(
+  "admin",
+  "super_admin"
+);
+var requireSuperAdmin = requireRoles("super_admin");
+function requireApprovedInstructor(stateSource) {
+  return (req, res, next) => {
+    const s = req.session ?? getSession2(req);
+    if (!s) {
+      res.status(401).json({ error: "Authentication required" });
+      return;
+    }
+    req.session = s;
+    const { users } = resolveState(stateSource);
+    const user = users.find((u) => u.id === s.userId);
+    if (s.role === "admin" || s.role === "super_admin") {
+      if (user) {
+        if (user.suspended) {
+          res.status(403).json({ error: "Account is suspended" });
+          return;
+        }
+        req.user = user;
+      }
+      next();
+      return;
+    }
+    if (s.role !== "instructor") {
+      res.status(403).json({
+        error: "Only instructors (or admins) can perform this action"
+      });
+      return;
+    }
+    if (!user) {
+      res.status(401).json({ error: "User not found" });
+      return;
+    }
+    if (user.suspended) {
+      res.status(403).json({ error: "Account is suspended" });
+      return;
+    }
+    if (user.isApproved === false) {
+      res.status(403).json({
+        error: "Instructor account is pending approval. You cannot create or publish courses until an admin approves your account."
+      });
+      return;
+    }
+    req.user = user;
+    next();
+  };
+}
+function requireSession(req, res) {
+  const s = getSession2(req);
+  if (!s) {
+    res.status(401).json({ error: "Authentication required" });
+    return null;
+  }
+  req.session = s;
+  return s;
+}
+function requireAdminSession(req, res) {
+  const s = getSession2(req);
+  if (!s) {
+    res.status(401).json({ error: "Authentication required" });
+    return null;
+  }
+  if (s.role !== "admin" && s.role !== "super_admin") {
+    res.status(403).json({ error: "Admin access required" });
+    return null;
+  }
+  req.session = s;
+  return s;
+}
+
 // server.ts
-var JWT_SECRET = process.env.JWT_SECRET;
-var COOKIE_NAME = "dma_token";
+var JWT_SECRET2 = process.env.JWT_SECRET;
+var COOKIE_NAME2 = "dma_token";
 var isProd = process.env.NODE_ENV === "production";
-var STATE_FILE = import_path.default.join(process.cwd(), "db_state.json");
+var STATE_FILE = import_path2.default.join(process.cwd(), "db_state.json");
 var PORT = process.env.PORT ? parseInt(process.env.PORT) : 5e3;
-if (!JWT_SECRET) {
+if (!JWT_SECRET2) {
   console.error("[FATAL] JWT_SECRET is required");
   process.exit(1);
 }
-var state = {
+var state2 = {
   users: [],
   courses: [],
   enrollments: [],
@@ -347,26 +702,26 @@ var state = {
   certDownloadHistory: [],
   siteNotice: null
 };
-function saveState() {
+function saveState2() {
   try {
-    import_fs.default.writeFileSync(STATE_FILE, JSON.stringify(state, null, 2));
+    import_fs2.default.writeFileSync(STATE_FILE, JSON.stringify(state2, null, 2));
   } catch (error) {
     console.error("[DMA] Could not write db_state.json", error);
   }
   if (isDatabaseAvailable()) {
-    saveStateToDatabase(state).catch((error) => console.error("[DB] Could not persist application state", error));
+    saveStateToDatabase(state2).catch((error) => console.error("[DB] Could not persist application state", error));
   }
 }
-function addLog(text, type = "general", userId) {
-  state.logs.unshift({ id: `log_${Date.now()}`, text, type, userId: userId || null, time: (/* @__PURE__ */ new Date()).toISOString() });
-  if (state.logs.length > 500) state.logs = state.logs.slice(0, 500);
-  saveState();
+function addLog2(text, type = "general", userId) {
+  state2.logs.unshift({ id: `log_${Date.now()}`, text, type, userId: userId || null, time: (/* @__PURE__ */ new Date()).toISOString() });
+  if (state2.logs.length > 500) state2.logs = state2.logs.slice(0, 500);
+  saveState2();
 }
 async function initializeState() {
-  if (import_fs.default.existsSync(STATE_FILE)) {
+  if (import_fs2.default.existsSync(STATE_FILE)) {
     try {
-      const raw = JSON.parse(import_fs.default.readFileSync(STATE_FILE, "utf8"));
-      state = { ...state, ...raw };
+      const raw = JSON.parse(import_fs2.default.readFileSync(STATE_FILE, "utf8"));
+      state2 = { ...state2, ...raw };
     } catch {
       console.error("[DMA] Could not parse db_state.json, using defaults");
     }
@@ -378,41 +733,41 @@ async function initializeState() {
   if (databaseConnected) {
     const databaseState = await getStateFromDatabase();
     if (databaseState) {
-      state = { ...state, ...databaseState };
-      console.log(`[DB] State loaded from PostgreSQL: ${state.users.length} users, ${state.courses.length} courses`);
+      state2 = { ...state2, ...databaseState };
+      console.log(`[DB] State loaded from PostgreSQL: ${state2.users.length} users, ${state2.courses.length} courses`);
     } else {
       console.log("[DB] No PostgreSQL state snapshot found; importing local baseline");
     }
   }
-  if (!Array.isArray(state.users)) state.users = [];
-  if (!Array.isArray(state.courses)) state.courses = [];
-  if (!Array.isArray(state.enrollments)) state.enrollments = [];
-  if (!Array.isArray(state.logs)) state.logs = [];
-  if (!Array.isArray(state.learningPaths)) state.learningPaths = [];
-  if (!Array.isArray(state.events)) state.events = [];
-  if (!Array.isArray(state.messages)) state.messages = [];
-  if (!Array.isArray(state.assignmentSubmissions)) state.assignmentSubmissions = [];
-  if (!Array.isArray(state.withdrawalRequests)) state.withdrawalRequests = [];
-  if (!Array.isArray(state.bankAccounts)) state.bankAccounts = [];
-  if (!Array.isArray(state.customRoles)) state.customRoles = [];
-  if (!Array.isArray(state.mediaLibrary)) state.mediaLibrary = [];
-  if (!Array.isArray(state.invites)) state.invites = [];
-  if (!Array.isArray(state.webinarPosts)) state.webinarPosts = [];
-  if (!Array.isArray(state.quizAttempts)) state.quizAttempts = [];
-  if (!Array.isArray(state.exams)) state.exams = [];
-  if (!Array.isArray(state.examAttempts)) state.examAttempts = [];
-  if (!Array.isArray(state.certTemplates)) state.certTemplates = [];
-  if (!Array.isArray(state.certDownloadHistory)) state.certDownloadHistory = [];
-  if (state.siteNotice !== null && typeof state.siteNotice !== "object") state.siteNotice = null;
-  if (state.certTemplates.length === 0) {
-    state.certTemplates = [
+  if (!Array.isArray(state2.users)) state2.users = [];
+  if (!Array.isArray(state2.courses)) state2.courses = [];
+  if (!Array.isArray(state2.enrollments)) state2.enrollments = [];
+  if (!Array.isArray(state2.logs)) state2.logs = [];
+  if (!Array.isArray(state2.learningPaths)) state2.learningPaths = [];
+  if (!Array.isArray(state2.events)) state2.events = [];
+  if (!Array.isArray(state2.messages)) state2.messages = [];
+  if (!Array.isArray(state2.assignmentSubmissions)) state2.assignmentSubmissions = [];
+  if (!Array.isArray(state2.withdrawalRequests)) state2.withdrawalRequests = [];
+  if (!Array.isArray(state2.bankAccounts)) state2.bankAccounts = [];
+  if (!Array.isArray(state2.customRoles)) state2.customRoles = [];
+  if (!Array.isArray(state2.mediaLibrary)) state2.mediaLibrary = [];
+  if (!Array.isArray(state2.invites)) state2.invites = [];
+  if (!Array.isArray(state2.webinarPosts)) state2.webinarPosts = [];
+  if (!Array.isArray(state2.quizAttempts)) state2.quizAttempts = [];
+  if (!Array.isArray(state2.exams)) state2.exams = [];
+  if (!Array.isArray(state2.examAttempts)) state2.examAttempts = [];
+  if (!Array.isArray(state2.certTemplates)) state2.certTemplates = [];
+  if (!Array.isArray(state2.certDownloadHistory)) state2.certDownloadHistory = [];
+  if (state2.siteNotice !== null && typeof state2.siteNotice !== "object") state2.siteNotice = null;
+  if (state2.certTemplates.length === 0) {
+    state2.certTemplates = [
       { id: "tmpl_default", name: "Standard Completion Certificate", style: "classic", primaryColor: "#0066ff", accentColor: "#00aaff", headerText: "Digital Manufacturing Academy", footerText: "British Council Co-funded \xB7 AIUB\u2013BCU Partnership", signatureLabel: "Programme Director", logoEnabled: true, badgeEnabled: true, isDefault: true, createdAt: (/* @__PURE__ */ new Date()).toISOString() },
       { id: "tmpl_distinction", name: "Distinction Certificate", style: "premium", primaryColor: "#7c3aed", accentColor: "#a78bfa", headerText: "Digital Manufacturing Academy \u2014 With Distinction", footerText: "Awarded for Outstanding Academic Performance \xB7 AIUB\u2013BCU", signatureLabel: "Academic Dean", logoEnabled: true, badgeEnabled: true, isDefault: false, createdAt: (/* @__PURE__ */ new Date()).toISOString() }
     ];
   }
-  if (state.webinarPosts.length === 0) {
+  if (state2.webinarPosts.length === 0) {
     const now = (/* @__PURE__ */ new Date()).toISOString();
-    state.webinarPosts = [
+    state2.webinarPosts = [
       {
         id: `wp_seed_1`,
         title: "Welcome to DMA Academy Platform!",
@@ -471,10 +826,10 @@ async function initializeState() {
     process.exit(1);
   }
   async function seedAdminUser(email, name, role, password) {
-    const exists = state.users.find((u) => u.email === email);
+    const exists = state2.users.find((u) => u.email === email);
     if (!exists) {
       const hashed = await import_bcryptjs.default.hash(password, 10);
-      state.users.unshift({
+      state2.users.unshift({
         id: `u_${role}_${Date.now()}`,
         name,
         email,
@@ -493,26 +848,26 @@ async function initializeState() {
   }
   await seedAdminUser(SEED_SUPER_ADMIN_EMAIL, "DMA Super Admin", "super_admin", SEED_SUPER_ADMIN_PASSWORD);
   await seedAdminUser(SEED_ADMIN_EMAIL, "DMA Admin", "admin", SEED_ADMIN_PASSWORD);
-  for (const u of state.users) {
+  for (const u of state2.users) {
     if (u.isApproved === void 0) u.isApproved = true;
     if (u.suspended === void 0) u.suspended = false;
   }
-  const c101 = state.courses.find((c) => c.id === "c_101");
+  const c101 = state2.courses.find((c) => c.id === "c_101");
   if (c101) {
     c101.isFree = true;
     c101.price = 0;
   }
-  if (!state.cmsContent) {
-    state.cmsContent = { pages: [] };
+  if (!state2.cmsContent) {
+    state2.cmsContent = { pages: [] };
   }
-  state.cmsContent = ensureCmsPages(state.cmsContent);
-  saveState();
-  if (isDatabaseAvailable()) await saveStateToDatabase(state);
-  console.log(`[DMA] State loaded: ${state.users.length} users, ${state.courses.length} courses`);
+  state2.cmsContent = ensureCmsPages(state2.cmsContent);
+  saveState2();
+  if (isDatabaseAvailable()) await saveStateToDatabase(state2);
+  console.log(`[DMA] State loaded: ${state2.users.length} users, ${state2.courses.length} courses`);
 }
 function issueToken(res, payload) {
-  const token = import_jsonwebtoken.default.sign(payload, JWT_SECRET, { expiresIn: "7d" });
-  res.cookie(COOKIE_NAME, token, {
+  const token = import_jsonwebtoken3.default.sign(payload, JWT_SECRET2, { expiresIn: "7d" });
+  res.cookie(COOKIE_NAME2, token, {
     httpOnly: true,
     secure: isProd,
     sameSite: isProd ? "strict" : "lax",
@@ -520,36 +875,6 @@ function issueToken(res, payload) {
     path: "/"
   });
   return token;
-}
-function getSession(req) {
-  const raw = req.cookies?.[COOKIE_NAME] || (req.headers.authorization?.startsWith("Bearer ") ? req.headers.authorization.slice(7) : null);
-  if (!raw) return null;
-  try {
-    const d = import_jsonwebtoken.default.verify(raw, JWT_SECRET);
-    return { userId: d.id, email: d.email, role: d.role };
-  } catch {
-    return null;
-  }
-}
-function requireSession(req, res) {
-  const s = getSession(req);
-  if (!s) {
-    res.status(401).json({ error: "Authentication required" });
-    return null;
-  }
-  return s;
-}
-function requireAdmin(req, res) {
-  const s = getSession(req);
-  if (!s) {
-    res.status(401).json({ error: "Authentication required" });
-    return null;
-  }
-  if (s.role !== "admin" && s.role !== "super_admin") {
-    res.status(403).json({ error: "Admin access required" });
-    return null;
-  }
-  return s;
 }
 function safeUser(u) {
   const { password: _pw, ...rest } = u;
@@ -574,10 +899,19 @@ function safeExam(exam, privileged = false) {
   });
   return { ...exam, questions };
 }
-var app = (0, import_express.default)();
-app.use(import_express.default.json({ limit: "10mb" }));
+var app = (0, import_express2.default)();
+app.use(import_express2.default.json({ limit: "10mb" }));
 app.use((0, import_cookie_parser.default)());
-app.post("/api/auth/register", async (req, res) => {
+app.use("/api/repository", repository_default);
+var authRateLimit = (0, import_express_rate_limit.default)({
+  windowMs: 15 * 60 * 1e3,
+  // 15 minutes
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many requests, please try again after 15 minutes." }
+});
+app.post("/api/auth/register", authRateLimit, async (req, res) => {
   try {
     const { name, email, role, password, inviteToken, bio, specialization, qualificationDoc, subscriptionPlan } = req.body;
     if (!name || !email) {
@@ -585,13 +919,13 @@ app.post("/api/auth/register", async (req, res) => {
       return;
     }
     const emailLower = email.toLowerCase();
-    if (state.users.find((u) => u.email === emailLower)) {
+    if (state2.users.find((u) => u.email === emailLower)) {
       res.status(409).json({ error: "Email already registered" });
       return;
     }
     let assignedRole = "student";
     if (inviteToken) {
-      const invite = state.invites.find((i) => i.token === inviteToken && i.status === "pending");
+      const invite = state2.invites.find((i) => i.token === inviteToken && i.status === "pending");
       if (invite && invite.email === emailLower) {
         assignedRole = invite.role;
         invite.status = "used";
@@ -617,9 +951,9 @@ app.post("/api/auth/register", async (req, res) => {
       specialization: specialization || "",
       qualificationDoc: qualificationDoc || null
     };
-    state.users.push(user);
-    addLog(`User registered: ${name} (${assignedRole})${assignedRole === "instructor" ? " [pending approval]" : ""}`, "register", user.id);
-    saveState();
+    state2.users.push(user);
+    addLog2(`User registered: ${name} (${assignedRole})${assignedRole === "instructor" ? " [pending approval]" : ""}`, "register", user.id);
+    saveState2();
     sendWelcomeEmail(user.email, user.name, user.role).catch(() => {
     });
     const token = issueToken(res, { id: user.id, email: user.email, role: user.role });
@@ -629,14 +963,14 @@ app.post("/api/auth/register", async (req, res) => {
     res.status(500).json({ error: "Registration failed" });
   }
 });
-app.post("/api/auth/login", async (req, res) => {
+app.post("/api/auth/login", authRateLimit, async (req, res) => {
   try {
     const { email, password } = req.body;
     if (!email || !password) {
       res.status(400).json({ error: "email and password are required" });
       return;
     }
-    const user = state.users.find((u) => u.email === email.toLowerCase());
+    const user = state2.users.find((u) => u.email === email.toLowerCase());
     if (!user) {
       res.status(401).json({ error: "Invalid credentials" });
       return;
@@ -662,35 +996,35 @@ app.post("/api/auth/login", async (req, res) => {
       return;
     }
     const token = issueToken(res, { id: user.id, email: user.email, role: user.role });
-    addLog(`User logged in: ${user.name}`, "login", user.id);
+    addLog2(`User logged in: ${user.name}`, "login", user.id);
     res.json({ status: "success", user: safeUser(user), token });
   } catch (err) {
     console.error("[login]", err);
     res.status(500).json({ error: "Login failed" });
   }
 });
-app.post("/api/auth/logout", (_req, res) => {
-  res.clearCookie(COOKIE_NAME, { path: "/" });
+app.post("/api/auth/logout", authRateLimit, (_req, res) => {
+  res.clearCookie(COOKIE_NAME2, { path: "/" });
   res.json({ status: "success" });
 });
-app.get("/api/auth/me", (req, res) => {
-  const session = getSession(req);
+app.get("/api/auth/me", authRateLimit, (req, res) => {
+  const session = getSession2(req);
   if (!session) {
     res.status(401).json({ error: "Not authenticated" });
     return;
   }
-  const user = state.users.find((u) => u.id === session.userId);
+  const user = state2.users.find((u) => u.id === session.userId);
   if (!user) {
     res.status(404).json({ error: "User not found" });
     return;
   }
   res.json({ status: "success", user: safeUser(user) });
 });
-app.post("/api/auth/change-password", async (req, res) => {
+app.post("/api/auth/change-password", authRateLimit, async (req, res) => {
   const session = requireSession(req, res);
   if (!session) return;
   const { currentPassword, newPassword } = req.body;
-  const user = state.users.find((u) => u.id === session.userId);
+  const user = state2.users.find((u) => u.id === session.userId);
   if (!user) {
     res.status(404).json({ error: "User not found" });
     return;
@@ -703,17 +1037,17 @@ app.post("/api/auth/change-password", async (req, res) => {
     }
   }
   user.password = await import_bcryptjs.default.hash(newPassword, 10);
-  saveState();
+  saveState2();
   res.json({ status: "success" });
 });
-app.post("/api/auth/forgot-password", async (req, res) => {
+app.post("/api/auth/forgot-password", authRateLimit, async (req, res) => {
   try {
     const { email } = req.body;
     if (!email) {
       res.status(400).json({ error: "Email is required" });
       return;
     }
-    const user = state.users.find((u) => u.email === email.toLowerCase().trim());
+    const user = state2.users.find((u) => u.email === email.toLowerCase().trim());
     if (!user) {
       res.json({ status: "success" });
       return;
@@ -722,17 +1056,17 @@ app.post("/api/auth/forgot-password", async (req, res) => {
     const expiry = Date.now() + 60 * 60 * 1e3;
     user.passwordResetToken = token;
     user.passwordResetExpiry = expiry;
-    saveState();
+    saveState2();
     const resetUrl = `${process.env.APP_URL || "https://digitalmanufacturing.academy"}/?reset=${token}`;
     await sendPasswordResetEmail(user.email, user.name, resetUrl);
-    addLog(`Password reset requested for: ${user.email}`, "password_reset_request", user.id);
+    addLog2(`Password reset requested for: ${user.email}`, "password_reset_request", user.id);
     res.json({ status: "success" });
   } catch (err) {
     console.error("[forgot-password]", err);
     res.status(500).json({ error: "Request failed" });
   }
 });
-app.post("/api/auth/reset-password", async (req, res) => {
+app.post("/api/auth/reset-password", authRateLimit, async (req, res) => {
   try {
     const { token, password } = req.body;
     if (!token || !password) {
@@ -743,7 +1077,7 @@ app.post("/api/auth/reset-password", async (req, res) => {
       res.status(400).json({ error: "Password must be at least 6 characters" });
       return;
     }
-    const user = state.users.find(
+    const user = state2.users.find(
       (u) => u.passwordResetToken === token && u.passwordResetExpiry > Date.now()
     );
     if (!user) {
@@ -753,8 +1087,8 @@ app.post("/api/auth/reset-password", async (req, res) => {
     user.password = await import_bcryptjs.default.hash(password, 10);
     user.passwordResetToken = null;
     user.passwordResetExpiry = null;
-    saveState();
-    addLog(`Password reset completed for: ${user.email}`, "password_reset", user.id);
+    saveState2();
+    addLog2(`Password reset completed for: ${user.email}`, "password_reset", user.id);
     res.json({ status: "success" });
   } catch (err) {
     console.error("[reset-password]", err);
@@ -763,10 +1097,10 @@ app.post("/api/auth/reset-password", async (req, res) => {
 });
 app.get("/api/leaderboard", (req, res) => {
   const { courseId } = req.query;
-  const enrollments = courseId ? state.enrollments.filter((e) => e.courseId === courseId) : state.enrollments;
+  const enrollments = courseId ? state2.enrollments.filter((e) => e.courseId === courseId) : state2.enrollments;
   const userMap = {};
   for (const e of enrollments) {
-    const user = state.users.find((u) => u.id === e.userId);
+    const user = state2.users.find((u) => u.id === e.userId);
     if (!user) continue;
     if (!userMap[e.userId]) {
       userMap[e.userId] = {
@@ -790,7 +1124,7 @@ app.get("/api/leaderboard", (req, res) => {
       }
     }
   }
-  for (const a of state.quizAttempts || []) {
+  for (const a of state2.quizAttempts || []) {
     if (userMap[a.userId] && typeof a.score === "number") {
       userMap[a.userId].quizScores.push(a.score);
     }
@@ -815,107 +1149,130 @@ app.get("/api/leaderboard", (req, res) => {
   res.json({ leaderboard: ranked, updatedAt: (/* @__PURE__ */ new Date()).toISOString() });
 });
 app.get("/api/courses", (_req, res) => {
-  const published = state.courses.filter((c) => c.isPublished !== false).map((c) => safeCourse(c, false));
+  const published = state2.courses.filter((c) => c.isPublished !== false).map((c) => safeCourse(c, false));
   res.json(published);
 });
 app.get("/api/courses/enrollments/:userId", (req, res) => {
-  const session = getSession(req);
+  const session = getSession2(req);
   const { userId } = req.params;
   if (!session || session.userId !== userId && session.role !== "admin" && session.role !== "super_admin") {
     res.status(403).json({ error: "Access denied" });
     return;
   }
-  const enrollments = state.enrollments.filter((e) => e.userId === userId);
+  const enrollments = state2.enrollments.filter((e) => e.userId === userId);
   res.json({ enrollments });
 });
 app.get("/api/courses/:id", (req, res) => {
-  const course = state.courses.find((c) => c.id === req.params.id);
+  const course = state2.courses.find((c) => c.id === req.params.id);
   if (!course) {
     res.status(404).json({ error: "Course not found" });
     return;
   }
-  const session = getSession(req);
+  const session = getSession2(req);
   const privileged = session && (session.role === "admin" || session.role === "super_admin" || session.role === "instructor" && course.instructorId === session.userId);
   res.json(safeCourse(course, !!privileged));
 });
-app.post("/api/courses/create", async (req, res) => {
-  const session = requireSession(req, res);
-  if (!session) return;
-  const { title, headline, description, category, level, duration, price, image, isFree } = req.body;
-  if (!title || !category) {
-    res.status(400).json({ error: "title and category required" });
-    return;
+app.post(
+  "/api/courses/create",
+  requireApprovedInstructor(() => state2),
+  async (req, res) => {
+    const session = req.session;
+    const user = req.user || state2.users.find((u) => u.id === session.userId);
+    const { title, headline, description, category, level, duration, price, image, isFree } = req.body;
+    if (!title || !category) {
+      res.status(400).json({ error: "title and category required" });
+      return;
+    }
+    const course = {
+      id: `c_${Date.now()}`,
+      title,
+      headline: headline || "",
+      description: description || "",
+      category,
+      level: level || "Beginner",
+      duration: duration || "TBD",
+      instructorId: session.userId,
+      instructorName: user?.name || "Instructor",
+      price: isFree ? 0 : price || 0,
+      isFree: !!isFree,
+      image: image || "",
+      isPublished: false,
+      approvalStatus: "draft",
+      enrollmentCount: 0,
+      lessons: [],
+      quizzes: [],
+      createdAt: (/* @__PURE__ */ new Date()).toISOString()
+    };
+    state2.courses.push(course);
+    addLog2(`Course created: ${title}`, "course_create", session.userId);
+    saveState2();
+    res.json({ status: "success", course });
   }
-  const user = state.users.find((u) => u.id === session.userId);
-  const course = {
-    id: `c_${Date.now()}`,
-    title,
-    headline: headline || "",
-    description: description || "",
-    category,
-    level: level || "Beginner",
-    duration: duration || "TBD",
-    instructorId: session.userId,
-    instructorName: user?.name || "Instructor",
-    price: isFree ? 0 : price || 0,
-    isFree: !!isFree,
-    image: image || "",
-    isPublished: false,
-    approvalStatus: "draft",
-    enrollmentCount: 0,
-    lessons: [],
-    quizzes: [],
-    createdAt: (/* @__PURE__ */ new Date()).toISOString()
-  };
-  state.courses.push(course);
-  addLog(`Course created: ${title}`, "course_create", session.userId);
-  saveState();
-  res.json({ status: "success", course });
-});
+);
 app.post("/api/courses/update", (req, res) => {
   const session = requireSession(req, res);
   if (!session) return;
+  const actor = state2.users.find((u) => u.id === session.userId);
+  if (actor?.suspended) {
+    res.status(403).json({ error: "Account is suspended" });
+    return;
+  }
   const { courseId, updates } = req.body;
-  const idx = state.courses.findIndex((c) => c.id === courseId);
+  const idx = state2.courses.findIndex((c) => c.id === courseId);
   if (idx === -1) {
     res.status(404).json({ error: "Course not found" });
     return;
   }
-  const course = state.courses[idx];
-  if (course.instructorId !== session.userId && session.role !== "admin" && session.role !== "super_admin") {
+  const course = state2.courses[idx];
+  const isOwner = course.instructorId === session.userId;
+  const isAdmin = session.role === "admin" || session.role === "super_admin";
+  if (!isOwner && !isAdmin) {
     res.status(403).json({ error: "Unauthorized" });
     return;
   }
-  state.courses[idx] = { ...course, ...updates };
-  saveState();
-  res.json({ status: "success", course: state.courses[idx] });
+  if (isOwner && session.role === "instructor" && actor?.isApproved === false) {
+    res.status(403).json({ error: "Instructor account is pending approval" });
+    return;
+  }
+  state2.courses[idx] = { ...course, ...updates };
+  saveState2();
+  res.json({ status: "success", course: state2.courses[idx] });
 });
 app.post("/api/courses/submit-for-review", (req, res) => {
   const session = requireSession(req, res);
   if (!session) return;
+  const actor = state2.users.find((u) => u.id === session.userId);
+  if (actor?.suspended) {
+    res.status(403).json({ error: "Account is suspended" });
+    return;
+  }
+  if (session.role === "instructor" && actor?.isApproved === false) {
+    res.status(403).json({ error: "Instructor account is pending approval" });
+    return;
+  }
   const { courseId } = req.body;
-  const course = state.courses.find((c) => c.id === courseId && c.instructorId === session.userId);
+  const course = state2.courses.find((c) => c.id === courseId && c.instructorId === session.userId);
   if (!course) {
-    res.status(404).json({ error: "Course not found" });
+    res.status(404).json({ error: "Course not found or not owned by you" });
     return;
   }
   course.approvalStatus = "pending";
   course.isPublished = false;
-  addLog(`Course "${course.title}" submitted for review`, "course_review", session.userId);
-  saveState();
+  addLog2(`Course "${course.title}" submitted for review`, "course_review", session.userId);
+  saveState2();
   res.json({ status: "success" });
 });
 app.post("/api/courses/:id/enroll", (req, res) => {
   const session = requireSession(req, res);
   if (!session) return;
   const { id } = req.params;
-  const courseIdx = state.courses.findIndex((c) => c.id === id);
+  const courseIdx = state2.courses.findIndex((c) => c.id === id);
   if (courseIdx === -1) {
     res.status(404).json({ error: "Course not found" });
     return;
   }
-  const course = state.courses[courseIdx];
-  const existing = state.enrollments.find(
+  const course = state2.courses[courseIdx];
+  const existing = state2.enrollments.find(
     (e) => e.userId === session.userId && e.courseId === id
   );
   if (existing) {
@@ -932,13 +1289,13 @@ app.post("/api/courses/:id/enroll", (req, res) => {
     enrolledAt: (/* @__PURE__ */ new Date()).toISOString(),
     completedAt: null
   };
-  state.enrollments.push(enrollment);
-  state.courses[courseIdx] = {
+  state2.enrollments.push(enrollment);
+  state2.courses[courseIdx] = {
     ...course,
     enrollmentCount: (course.enrollmentCount || 0) + 1
   };
-  addLog(`User enrolled in: ${course.title}`, "enrollment", session.userId);
-  saveState();
+  addLog2(`User enrolled in: ${course.title}`, "enrollment", session.userId);
+  saveState2();
   res.json({ status: "success", enrollment });
 });
 app.post("/api/courses/:id/progress", (req, res) => {
@@ -946,18 +1303,18 @@ app.post("/api/courses/:id/progress", (req, res) => {
   if (!session) return;
   const { id } = req.params;
   const { lessonId } = req.body;
-  const enrollment = state.enrollments.find((e) => e.userId === session.userId && e.courseId === id);
+  const enrollment = state2.enrollments.find((e) => e.userId === session.userId && e.courseId === id);
   if (!enrollment) {
     res.status(404).json({ error: "Not enrolled" });
     return;
   }
   if (!enrollment.completedLessons) enrollment.completedLessons = [];
   if (!enrollment.completedLessons.includes(lessonId)) enrollment.completedLessons.push(lessonId);
-  const course = state.courses.find((c) => c.id === id);
+  const course = state2.courses.find((c) => c.id === id);
   const lessons = (course?.lessons || []).filter((l) => l.isRequired !== false);
   enrollment.progress = lessons.length > 0 ? Math.round(enrollment.completedLessons.length / lessons.length * 100) : 0;
   if (enrollment.progress >= 100) enrollment.completedAt = (/* @__PURE__ */ new Date()).toISOString();
-  saveState();
+  saveState2();
   res.json({ status: "success", enrollment });
 });
 app.post("/api/courses/:id/quiz", (req, res) => {
@@ -965,12 +1322,12 @@ app.post("/api/courses/:id/quiz", (req, res) => {
   if (!session) return;
   const { id } = req.params;
   const { quizId, answers } = req.body;
-  const enrollment = state.enrollments.find((e) => e.userId === session.userId && e.courseId === id);
+  const enrollment = state2.enrollments.find((e) => e.userId === session.userId && e.courseId === id);
   if (!enrollment) {
     res.status(404).json({ error: "Not enrolled" });
     return;
   }
-  const course = state.courses.find((c) => c.id === id);
+  const course = state2.courses.find((c) => c.id === id);
   const quiz = (course?.quizzes || []).find((q) => q.id === quizId);
   if (!quiz) {
     res.status(404).json({ error: "Quiz not found" });
@@ -984,22 +1341,22 @@ app.post("/api/courses/:id/quiz", (req, res) => {
   const passed = score >= (quiz.passingScore || 80);
   if (!enrollment.quizAttempts) enrollment.quizAttempts = {};
   enrollment.quizAttempts[quizId] = { score, passed, attemptedAt: (/* @__PURE__ */ new Date()).toISOString() };
-  saveState();
+  saveState2();
   res.json({ status: "success", score, passed, correct, total: quiz.questions.length });
 });
 app.get("/api/db-state", (req, res) => {
-  const session = getSession(req);
+  const session = getSession2(req);
   const isAdmin = session && (session.role === "admin" || session.role === "super_admin");
   const isInstructor = session?.role === "instructor";
   res.json({
-    users: isAdmin ? state.users.map(safeUser) : [],
-    courses: state.courses.filter((c) => isAdmin || c.isPublished !== false).map((c) => safeCourse(c, isAdmin || isInstructor && c.instructorId === session?.userId)),
-    enrollments: session ? state.enrollments.filter((e) => isAdmin || e.userId === session.userId) : [],
-    certificates: state.certificates || [],
-    learningPaths: state.learningPaths,
-    events: state.events,
-    logs: isAdmin ? state.logs : [],
-    messages: session ? state.messages.filter((m) => isAdmin || m.toUserId === session.userId || m.fromUserId === session.userId) : []
+    users: isAdmin ? state2.users.map(safeUser) : [],
+    courses: state2.courses.filter((c) => isAdmin || c.isPublished !== false).map((c) => safeCourse(c, isAdmin || isInstructor && c.instructorId === session?.userId)),
+    enrollments: session ? state2.enrollments.filter((e) => isAdmin || e.userId === session.userId) : [],
+    certificates: session ? isAdmin ? state2.certificates || [] : (state2.certificates || []).filter((c) => c.userId === session.userId) : [],
+    learningPaths: state2.learningPaths,
+    events: state2.events,
+    logs: isAdmin ? state2.logs : [],
+    messages: session ? state2.messages.filter((m) => isAdmin || m.toUserId === session.userId || m.fromUserId === session.userId) : []
   });
 });
 app.post("/api/courses/enroll", (req, res) => {
@@ -1010,13 +1367,13 @@ app.post("/api/courses/enroll", (req, res) => {
     res.status(400).json({ error: "courseId required" });
     return;
   }
-  const courseIdx = state.courses.findIndex((c) => c.id === courseId);
+  const courseIdx = state2.courses.findIndex((c) => c.id === courseId);
   if (courseIdx === -1) {
     res.status(404).json({ error: "Course not found" });
     return;
   }
-  const course = state.courses[courseIdx];
-  const existing = state.enrollments.find((e) => e.userId === session.userId && e.courseId === courseId);
+  const course = state2.courses[courseIdx];
+  const existing = state2.enrollments.find((e) => e.userId === session.userId && e.courseId === courseId);
   if (existing) {
     res.json({ status: "already_enrolled", enrollment: existing });
     return;
@@ -1031,10 +1388,10 @@ app.post("/api/courses/enroll", (req, res) => {
     enrolledAt: (/* @__PURE__ */ new Date()).toISOString(),
     completedAt: null
   };
-  state.enrollments.push(enrollment);
-  state.courses[courseIdx] = { ...course, enrollmentCount: (course.enrollmentCount || 0) + 1 };
-  addLog(`User enrolled in: ${course.title}`, "enrollment", session.userId);
-  saveState();
+  state2.enrollments.push(enrollment);
+  state2.courses[courseIdx] = { ...course, enrollmentCount: (course.enrollmentCount || 0) + 1 };
+  addLog2(`User enrolled in: ${course.title}`, "enrollment", session.userId);
+  saveState2();
   res.json({ status: "success", enrollment });
 });
 app.post("/api/courses/sync-progress", (req, res) => {
@@ -1042,7 +1399,7 @@ app.post("/api/courses/sync-progress", (req, res) => {
   if (!session) return;
   const { userId, courseId, lessonId, quizId, score, passed } = req.body;
   const uid = userId || session.userId;
-  const enrollment = state.enrollments.find((e) => e.userId === uid && e.courseId === courseId);
+  const enrollment = state2.enrollments.find((e) => e.userId === uid && e.courseId === courseId);
   if (!enrollment) {
     res.status(404).json({ error: "Not enrolled" });
     return;
@@ -1050,7 +1407,7 @@ app.post("/api/courses/sync-progress", (req, res) => {
   if (lessonId) {
     if (!enrollment.completedLessons) enrollment.completedLessons = [];
     if (!enrollment.completedLessons.includes(lessonId)) enrollment.completedLessons.push(lessonId);
-    const course = state.courses.find((c) => c.id === courseId);
+    const course = state2.courses.find((c) => c.id === courseId);
     const lessons = (course?.lessons || []).filter((l) => l.isRequired !== false);
     enrollment.progress = lessons.length > 0 ? Math.round(enrollment.completedLessons.length / lessons.length * 100) : 0;
     if (enrollment.progress >= 100) enrollment.completedAt = (/* @__PURE__ */ new Date()).toISOString();
@@ -1059,45 +1416,45 @@ app.post("/api/courses/sync-progress", (req, res) => {
     if (!enrollment.quizAttempts) enrollment.quizAttempts = {};
     enrollment.quizAttempts[quizId] = { score: score || 0, passed: !!passed, attemptedAt: (/* @__PURE__ */ new Date()).toISOString() };
   }
-  saveState();
+  saveState2();
   res.json({ status: "success", enrollment });
 });
 app.get("/api/subscription/status", (req, res) => {
-  const session = getSession(req);
+  const session = getSession2(req);
   if (!session) {
     res.status(401).json({ error: "Not authenticated" });
     return;
   }
-  const user = state.users.find((u) => u.id === session.userId);
+  const user = state2.users.find((u) => u.id === session.userId);
   res.json({ plan: user?.subscriptionPlan || "free", status: "active" });
 });
 app.post("/api/subscription/upgrade", (req, res) => {
   const session = requireSession(req, res);
   if (!session) return;
   const { planId } = req.body;
-  const user = state.users.find((u) => u.id === session.userId);
+  const user = state2.users.find((u) => u.id === session.userId);
   if (!user) {
     res.status(404).json({ error: "User not found" });
     return;
   }
   user.subscriptionPlan = planId || "pro";
-  saveState();
+  saveState2();
   res.json({ status: "success", transactionId: `txn_${Date.now()}`, plan: user.subscriptionPlan });
 });
 app.post("/api/subscription/cancel", (req, res) => {
   const session = requireSession(req, res);
   if (!session) return;
-  const user = state.users.find((u) => u.id === session.userId);
+  const user = state2.users.find((u) => u.id === session.userId);
   if (!user) {
     res.status(404).json({ error: "User not found" });
     return;
   }
   user.subscriptionPlan = "free";
-  saveState();
+  saveState2();
   res.json({ status: "success" });
 });
 app.get("/api/webinars", (_req, res) => {
-  res.json({ posts: Array.isArray(state.webinarPosts) ? state.webinarPosts : [] });
+  res.json({ posts: Array.isArray(state2.webinarPosts) ? state2.webinarPosts : [] });
 });
 app.post("/api/webinars/create", (req, res) => {
   const session = requireSession(req, res);
@@ -1106,7 +1463,7 @@ app.post("/api/webinars/create", (req, res) => {
     res.status(403).json({ error: "Only admins and instructors can post" });
     return;
   }
-  const user = state.users.find((u) => u.id === session.userId);
+  const user = state2.users.find((u) => u.id === session.userId);
   if (!user) {
     res.status(401).json({ error: "User not found" });
     return;
@@ -1131,73 +1488,73 @@ app.post("/api/webinars/create", (req, res) => {
     pinned: false,
     views: 0
   };
-  if (!Array.isArray(state.webinarPosts)) state.webinarPosts = [];
-  state.webinarPosts.unshift(post);
-  addLog(`Webinar post created: "${title}" by ${user.name}`, "webinar", session.userId);
-  saveState();
+  if (!Array.isArray(state2.webinarPosts)) state2.webinarPosts = [];
+  state2.webinarPosts.unshift(post);
+  addLog2(`Webinar post created: "${title}" by ${user.name}`, "webinar", session.userId);
+  saveState2();
   res.json({ status: "success", post });
 });
 app.delete("/api/webinars/:id", (req, res) => {
-  const session = requireAdmin(req, res);
+  const session = requireAdminSession(req, res);
   if (!session) return;
-  if (!Array.isArray(state.webinarPosts)) {
+  if (!Array.isArray(state2.webinarPosts)) {
     res.status(404).json({ error: "Post not found" });
     return;
   }
-  const idx = state.webinarPosts.findIndex((p) => p.id === req.params.id);
+  const idx = state2.webinarPosts.findIndex((p) => p.id === req.params.id);
   if (idx === -1) {
     res.status(404).json({ error: "Post not found" });
     return;
   }
-  state.webinarPosts.splice(idx, 1);
-  saveState();
+  state2.webinarPosts.splice(idx, 1);
+  saveState2();
   res.json({ status: "success" });
 });
 app.post("/api/webinars/:id/pin", (req, res) => {
-  const session = requireAdmin(req, res);
+  const session = requireAdminSession(req, res);
   if (!session) return;
-  if (!Array.isArray(state.webinarPosts)) {
+  if (!Array.isArray(state2.webinarPosts)) {
     res.status(404).json({ error: "Post not found" });
     return;
   }
-  const post = state.webinarPosts.find((p) => p.id === req.params.id);
+  const post = state2.webinarPosts.find((p) => p.id === req.params.id);
   if (!post) {
     res.status(404).json({ error: "Post not found" });
     return;
   }
   post.pinned = !post.pinned;
-  saveState();
+  saveState2();
   res.json({ status: "success", pinned: post.pinned });
 });
 app.get("/api/my/enrollments", (req, res) => {
   const session = requireSession(req, res);
   if (!session) return;
-  const enrollments = state.enrollments.filter((e) => e.userId === session.userId);
+  const enrollments = state2.enrollments.filter((e) => e.userId === session.userId);
   res.json({ enrollments });
 });
 app.get("/api/my/certificates", (req, res) => {
   const session = requireSession(req, res);
   if (!session) return;
-  const certs = (state.certificates || []).filter((c) => c.userId === session.userId);
+  const certs = (state2.certificates || []).filter((c) => c.userId === session.userId);
   res.json({ certificates: certs });
 });
 app.get("/api/enrollments/:userId", (req, res) => {
-  const session = getSession(req);
+  const session = getSession2(req);
   const { userId } = req.params;
   if (!session || session.userId !== userId && session.role !== "admin" && session.role !== "super_admin") {
     res.status(403).json({ error: "Access denied" });
     return;
   }
-  const enrollments = state.enrollments.filter((e) => e.userId === userId);
+  const enrollments = state2.enrollments.filter((e) => e.userId === userId);
   res.json({ enrollments });
 });
 app.get("/api/admin/users", (req, res) => {
-  const session = requireAdmin(req, res);
+  const session = requireAdminSession(req, res);
   if (!session) return;
-  res.json({ status: "success", users: state.users.map(safeUser) });
+  res.json({ status: "success", users: state2.users.map(safeUser) });
 });
 app.post("/api/admin/users/create", async (req, res) => {
-  const session = requireAdmin(req, res);
+  const session = requireAdminSession(req, res);
   if (!session) return;
   const { name, email, role, avatar, password, customRoleId } = req.body;
   if (!name || !email || !role) {
@@ -1212,7 +1569,7 @@ app.post("/api/admin/users/create", async (req, res) => {
     res.status(403).json({ error: "Only super admin can create super admin accounts" });
     return;
   }
-  if (state.users.find((u) => u.email === email.toLowerCase())) {
+  if (state2.users.find((u) => u.email === email.toLowerCase())) {
     res.status(400).json({ error: "Email already registered" });
     return;
   }
@@ -1230,16 +1587,16 @@ app.post("/api/admin/users/create", async (req, res) => {
     joinedAt: (/* @__PURE__ */ new Date()).toISOString(),
     customRoleId: customRoleId || null
   };
-  state.users.push(user);
-  addLog(`Admin created user: ${name} (${role})`, "user_create", session.userId);
-  saveState();
+  state2.users.push(user);
+  addLog2(`Admin created user: ${name} (${role})`, "user_create", session.userId);
+  saveState2();
   res.json({ status: "success", user: safeUser(user) });
 });
 app.put("/api/admin/users/:id", (req, res) => {
-  const session = requireAdmin(req, res);
+  const session = requireAdminSession(req, res);
   if (!session) return;
   const { id } = req.params;
-  const target = state.users.find((u) => u.id === id);
+  const target = state2.users.find((u) => u.id === id);
   if (!target) {
     res.status(404).json({ error: "User not found" });
     return;
@@ -1259,12 +1616,12 @@ app.put("/api/admin/users/:id", (req, res) => {
   if (avatar !== void 0) target.avatar = avatar;
   if (subscriptionPlan !== void 0) target.subscriptionPlan = subscriptionPlan;
   if (customRoleId !== void 0) target.customRoleId = customRoleId || null;
-  addLog(`Admin updated user: ${target.name}`, "user_update", session.userId);
-  saveState();
+  addLog2(`Admin updated user: ${target.name}`, "user_update", session.userId);
+  saveState2();
   res.json({ status: "success", user: safeUser(target) });
 });
 app.post("/api/admin/users/:id/suspend", (req, res) => {
-  const session = requireAdmin(req, res);
+  const session = requireAdminSession(req, res);
   if (!session) return;
   const { id } = req.params;
   const { suspend } = req.body;
@@ -1272,7 +1629,7 @@ app.post("/api/admin/users/:id/suspend", (req, res) => {
     res.status(400).json({ error: "Cannot suspend your own account" });
     return;
   }
-  const target = state.users.find((u) => u.id === id);
+  const target = state2.users.find((u) => u.id === id);
   if (!target) {
     res.status(404).json({ error: "User not found" });
     return;
@@ -1282,51 +1639,51 @@ app.post("/api/admin/users/:id/suspend", (req, res) => {
     return;
   }
   target.suspended = !!suspend;
-  addLog(`Admin ${suspend ? "suspended" : "unsuspended"} user: ${target.name}`, "user_suspend", session.userId);
-  saveState();
+  addLog2(`Admin ${suspend ? "suspended" : "unsuspended"} user: ${target.name}`, "user_suspend", session.userId);
+  saveState2();
   res.json({ status: "success" });
 });
 app.delete("/api/admin/users/:id", (req, res) => {
-  const session = requireAdmin(req, res);
+  const session = requireAdminSession(req, res);
   if (!session) return;
   const { id } = req.params;
   if (id === session.userId) {
     res.status(400).json({ error: "Cannot delete your own account" });
     return;
   }
-  const idx = state.users.findIndex((u) => u.id === id);
+  const idx = state2.users.findIndex((u) => u.id === id);
   if (idx === -1) {
     res.status(404).json({ error: "User not found" });
     return;
   }
-  if (state.users[idx].role === "super_admin" && session.role !== "super_admin") {
+  if (state2.users[idx].role === "super_admin" && session.role !== "super_admin") {
     res.status(403).json({ error: "Admin cannot delete super admin accounts" });
     return;
   }
-  const name = state.users[idx].name;
-  state.users.splice(idx, 1);
-  addLog(`Admin deleted user: ${name}`, "user_delete", session.userId);
-  saveState();
+  const name = state2.users[idx].name;
+  state2.users.splice(idx, 1);
+  addLog2(`Admin deleted user: ${name}`, "user_delete", session.userId);
+  saveState2();
   res.json({ status: "success" });
 });
 app.post("/api/admin/users/:id/reset-password", async (req, res) => {
-  const session = requireAdmin(req, res);
+  const session = requireAdminSession(req, res);
   if (!session) return;
-  const user = state.users.find((u) => u.id === req.params.id);
+  const user = state2.users.find((u) => u.id === req.params.id);
   if (!user) {
     res.status(404).json({ error: "User not found" });
     return;
   }
   const tempPassword = `DMA-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
   user.password = await import_bcryptjs.default.hash(tempPassword, 10);
-  addLog(`Admin reset password for: ${user.name}`, "password_reset", session.userId);
-  saveState();
+  addLog2(`Admin reset password for: ${user.name}`, "password_reset", session.userId);
+  saveState2();
   sendTempPasswordEmail(user.email, user.name, tempPassword).catch(() => {
   });
   res.json({ status: "success", tempPassword });
 });
 app.post("/api/admin/users/invite", (req, res) => {
-  const session = requireAdmin(req, res);
+  const session = requireAdminSession(req, res);
   if (!session) return;
   const { email, role } = req.body;
   if (!email || !role) {
@@ -1335,111 +1692,111 @@ app.post("/api/admin/users/invite", (req, res) => {
   }
   const token = import_crypto.default.randomBytes(16).toString("hex");
   const invite = { id: `inv_${Date.now()}`, email, role, token, status: "pending", createdAt: (/* @__PURE__ */ new Date()).toISOString() };
-  state.invites.push(invite);
-  addLog(`Invite generated for: ${email} (${role})`, "invite", session.userId);
-  saveState();
+  state2.invites.push(invite);
+  addLog2(`Invite generated for: ${email} (${role})`, "invite", session.userId);
+  saveState2();
   const inviteUrl = `https://digitalmanufacturing.academy/register?invite=${token}`;
   sendInviteEmail(email, role, inviteUrl).catch(() => {
   });
   res.json({ status: "success", invite, inviteUrl: `/register?invite=${token}` });
 });
 app.get("/api/admin/invites", (req, res) => {
-  const session = requireAdmin(req, res);
+  const session = requireAdminSession(req, res);
   if (!session) return;
-  res.json({ status: "success", invites: [...state.invites].reverse() });
+  res.json({ status: "success", invites: [...state2.invites].reverse() });
 });
 app.post("/api/admin/approve-instructor", (req, res) => {
-  const session = requireAdmin(req, res);
+  const session = requireAdminSession(req, res);
   if (!session) return;
   const { instructorId } = req.body;
-  const user = state.users.find((u) => u.id === instructorId);
+  const user = state2.users.find((u) => u.id === instructorId);
   if (!user) {
     res.status(404).json({ error: "Instructor not found" });
     return;
   }
   user.isApproved = true;
-  addLog(`Approved instructor: ${user.name}`, "instructor_approve", session.userId);
-  saveState();
+  addLog2(`Approved instructor: ${user.name}`, "instructor_approve", session.userId);
+  saveState2();
   sendInstructorApprovalEmail(user.email, user.name).catch(() => {
   });
   res.json({ status: "success" });
 });
 app.delete("/api/admin/courses/:id", (req, res) => {
-  const session = requireAdmin(req, res);
+  const session = requireAdminSession(req, res);
   if (!session) return;
-  const idx = state.courses.findIndex((c) => c.id === req.params.id);
+  const idx = state2.courses.findIndex((c) => c.id === req.params.id);
   if (idx === -1) {
     res.status(404).json({ error: "Course not found" });
     return;
   }
-  const title = state.courses[idx].title;
-  state.courses.splice(idx, 1);
-  addLog(`Admin removed course: ${title}`, "course_delete", session.userId);
-  saveState();
+  const title = state2.courses[idx].title;
+  state2.courses.splice(idx, 1);
+  addLog2(`Admin removed course: ${title}`, "course_delete", session.userId);
+  saveState2();
   res.json({ status: "success" });
 });
 app.post("/api/admin/approve-course", (req, res) => {
-  const session = requireAdmin(req, res);
+  const session = requireAdminSession(req, res);
   if (!session) return;
   const { courseId } = req.body;
-  const course = state.courses.find((c) => c.id === courseId);
+  const course = state2.courses.find((c) => c.id === courseId);
   if (!course) {
     res.status(404).json({ error: "Course not found" });
     return;
   }
   course.approvalStatus = "approved";
   course.isPublished = true;
-  addLog(`Course "${course.title}" approved and published`, "course_approve", session.userId);
-  saveState();
+  addLog2(`Course "${course.title}" approved and published`, "course_approve", session.userId);
+  saveState2();
   res.json({ status: "success" });
 });
 app.post("/api/admin/reject-course", (req, res) => {
-  const session = requireAdmin(req, res);
+  const session = requireAdminSession(req, res);
   if (!session) return;
   const { courseId, reason } = req.body;
-  const course = state.courses.find((c) => c.id === courseId);
+  const course = state2.courses.find((c) => c.id === courseId);
   if (!course) {
     res.status(404).json({ error: "Course not found" });
     return;
   }
   course.approvalStatus = "rejected";
   course.rejectionReason = reason || "Does not meet quality standards";
-  saveState();
+  saveState2();
   res.json({ status: "success" });
 });
 app.get("/api/admin/logs", (req, res) => {
-  const session = requireAdmin(req, res);
+  const session = requireAdminSession(req, res);
   if (!session) return;
-  res.json({ logs: state.logs.slice(0, 200) });
+  res.json({ logs: state2.logs.slice(0, 200) });
 });
 app.post("/api/admin/clear-logs", (req, res) => {
-  const session = requireAdmin(req, res);
+  const session = requireAdminSession(req, res);
   if (!session) return;
-  state.logs = [{ id: `log_${Date.now()}`, text: "Activity logs cleared by admin.", type: "admin", time: (/* @__PURE__ */ new Date()).toISOString() }];
-  saveState();
+  state2.logs = [{ id: `log_${Date.now()}`, text: "Activity logs cleared by admin.", type: "admin", time: (/* @__PURE__ */ new Date()).toISOString() }];
+  saveState2();
   res.json({ status: "success" });
 });
 app.get("/api/admin/stats", (req, res) => {
-  const session = requireAdmin(req, res);
+  const session = requireAdminSession(req, res);
   if (!session) return;
   res.json({
-    userCount: state.users.length,
-    courseCount: state.courses.filter((c) => c.isPublished).length,
-    enrollmentCount: state.enrollments.length
+    userCount: state2.users.length,
+    courseCount: state2.courses.filter((c) => c.isPublished).length,
+    enrollmentCount: state2.enrollments.length
   });
 });
 app.get("/api/admin/enrollments", (req, res) => {
-  const session = requireAdmin(req, res);
+  const session = requireAdminSession(req, res);
   if (!session) return;
-  res.json({ enrollments: state.enrollments });
+  res.json({ enrollments: state2.enrollments });
 });
 app.get("/api/admin/roles", (req, res) => {
-  const session = requireAdmin(req, res);
+  const session = requireAdminSession(req, res);
   if (!session) return;
-  res.json({ status: "success", roles: state.customRoles });
+  res.json({ status: "success", roles: state2.customRoles });
 });
 app.post("/api/admin/roles/create", (req, res) => {
-  const session = requireAdmin(req, res);
+  const session = requireAdminSession(req, res);
   if (!session) return;
   const { name, description, permissions } = req.body;
   if (!name) {
@@ -1447,15 +1804,15 @@ app.post("/api/admin/roles/create", (req, res) => {
     return;
   }
   const role = { id: `role_${Date.now()}`, name, description: description || "", permissions: permissions || [], createdAt: (/* @__PURE__ */ new Date()).toISOString() };
-  state.customRoles.push(role);
-  addLog(`Admin created custom role: ${name}`, "role_create", session.userId);
-  saveState();
+  state2.customRoles.push(role);
+  addLog2(`Admin created custom role: ${name}`, "role_create", session.userId);
+  saveState2();
   res.json({ status: "success", role });
 });
 app.put("/api/admin/roles/:id", (req, res) => {
-  const session = requireAdmin(req, res);
+  const session = requireAdminSession(req, res);
   if (!session) return;
-  const role = state.customRoles.find((r) => r.id === req.params.id);
+  const role = state2.customRoles.find((r) => r.id === req.params.id);
   if (!role) {
     res.status(404).json({ error: "Role not found" });
     return;
@@ -1464,30 +1821,30 @@ app.put("/api/admin/roles/:id", (req, res) => {
   if (name) role.name = name;
   if (description !== void 0) role.description = description;
   if (permissions) role.permissions = permissions;
-  saveState();
+  saveState2();
   res.json({ status: "success", role });
 });
 app.delete("/api/admin/roles/:id", (req, res) => {
-  const session = requireAdmin(req, res);
+  const session = requireAdminSession(req, res);
   if (!session) return;
-  const idx = state.customRoles.findIndex((r) => r.id === req.params.id);
+  const idx = state2.customRoles.findIndex((r) => r.id === req.params.id);
   if (idx === -1) {
     res.status(404).json({ error: "Role not found" });
     return;
   }
-  const name = state.customRoles[idx].name;
-  state.customRoles.splice(idx, 1);
-  addLog(`Admin deleted custom role: ${name}`, "role_delete", session.userId);
-  saveState();
+  const name = state2.customRoles[idx].name;
+  state2.customRoles.splice(idx, 1);
+  addLog2(`Admin deleted custom role: ${name}`, "role_delete", session.userId);
+  saveState2();
   res.json({ status: "success" });
 });
 app.get("/api/admin/media", (req, res) => {
-  const session = requireAdmin(req, res);
+  const session = requireAdminSession(req, res);
   if (!session) return;
-  res.json({ status: "success", media: state.mediaLibrary });
+  res.json({ status: "success", media: state2.mediaLibrary });
 });
 app.post("/api/admin/media/upload", (req, res) => {
-  const session = requireAdmin(req, res);
+  const session = requireAdminSession(req, res);
   if (!session) return;
   const { name, dataUrl, type } = req.body;
   if (!name || !dataUrl) {
@@ -1495,45 +1852,45 @@ app.post("/api/admin/media/upload", (req, res) => {
     return;
   }
   const item = { id: `media_${Date.now()}`, name, dataUrl, type: type || "image", usedAs: null, uploadedAt: (/* @__PURE__ */ new Date()).toISOString() };
-  state.mediaLibrary.push(item);
-  addLog(`Media uploaded: ${name}`, "media_upload", session.userId);
-  saveState();
+  state2.mediaLibrary.push(item);
+  addLog2(`Media uploaded: ${name}`, "media_upload", session.userId);
+  saveState2();
   res.json({ status: "success", item });
 });
 app.delete("/api/admin/media/:id", (req, res) => {
-  const session = requireAdmin(req, res);
+  const session = requireAdminSession(req, res);
   if (!session) return;
-  const idx = state.mediaLibrary.findIndex((m) => m.id === req.params.id);
+  const idx = state2.mediaLibrary.findIndex((m) => m.id === req.params.id);
   if (idx === -1) {
     res.status(404).json({ error: "Media not found" });
     return;
   }
-  state.mediaLibrary.splice(idx, 1);
-  saveState();
+  state2.mediaLibrary.splice(idx, 1);
+  saveState2();
   res.json({ status: "success" });
 });
 app.post("/api/admin/media/:id/set-banner", (req, res) => {
-  const session = requireAdmin(req, res);
+  const session = requireAdminSession(req, res);
   if (!session) return;
   const { target } = req.body;
-  state.mediaLibrary.forEach((m) => {
+  state2.mediaLibrary.forEach((m) => {
     if (m.usedAs === target) m.usedAs = null;
   });
-  const item = state.mediaLibrary.find((m) => m.id === req.params.id);
+  const item = state2.mediaLibrary.find((m) => m.id === req.params.id);
   if (!item) {
     res.status(404).json({ error: "Media not found" });
     return;
   }
   item.usedAs = target;
-  addLog(`Media '${item.name}' set as ${target} banner`, "media_banner", session.userId);
-  saveState();
+  addLog2(`Media '${item.name}' set as ${target} banner`, "media_banner", session.userId);
+  saveState2();
   res.json({ status: "success", item });
 });
 app.get("/api/learning-paths", (_req, res) => {
-  res.json(state.learningPaths);
+  res.json(state2.learningPaths);
 });
 app.post("/api/learning-paths/create", (req, res) => {
-  const session = requireAdmin(req, res);
+  const session = requireAdminSession(req, res);
   if (!session) return;
   const { title, description, courseIds, badgeIcon, estimatedDuration } = req.body;
   if (!title || !courseIds) {
@@ -1550,25 +1907,25 @@ app.post("/api/learning-paths/create", (req, res) => {
     enrolledCount: 0,
     createdAt: (/* @__PURE__ */ new Date()).toISOString()
   };
-  state.learningPaths.push(lp);
-  addLog(`Learning path created: ${title}`, "lp_create", session.userId);
-  saveState();
+  state2.learningPaths.push(lp);
+  addLog2(`Learning path created: ${title}`, "lp_create", session.userId);
+  saveState2();
   res.json({ status: "success", learningPath: lp });
 });
 app.post("/api/learning-paths/enroll", (req, res) => {
   const session = requireSession(req, res);
   if (!session) return;
   const { pathId } = req.body;
-  const lp = state.learningPaths.find((p) => p.id === pathId);
+  const lp = state2.learningPaths.find((p) => p.id === pathId);
   if (!lp) {
     res.status(404).json({ error: "Learning path not found" });
     return;
   }
   lp.enrolledCount = (lp.enrolledCount || 0) + 1;
   for (const courseId of lp.courseIds || []) {
-    const alreadyEnrolled = state.enrollments.find((e) => e.userId === session.userId && e.courseId === courseId);
+    const alreadyEnrolled = state2.enrollments.find((e) => e.userId === session.userId && e.courseId === courseId);
     if (!alreadyEnrolled) {
-      state.enrollments.push({
+      state2.enrollments.push({
         id: `enr_${Date.now()}_${courseId}`,
         userId: session.userId,
         courseId,
@@ -1580,14 +1937,14 @@ app.post("/api/learning-paths/enroll", (req, res) => {
       });
     }
   }
-  saveState();
+  saveState2();
   res.json({ status: "success" });
 });
 app.get("/api/events", (_req, res) => {
-  res.json(state.events);
+  res.json(state2.events);
 });
 app.post("/api/events/create", (req, res) => {
-  const session = requireAdmin(req, res);
+  const session = requireAdminSession(req, res);
   if (!session) return;
   const { title, description, date, location, capacity, type } = req.body;
   if (!title || !date) {
@@ -1605,21 +1962,21 @@ app.post("/api/events/create", (req, res) => {
     attendeeCount: 0,
     createdAt: (/* @__PURE__ */ new Date()).toISOString()
   };
-  state.events.push(event);
-  addLog(`Event created: ${title}`, "event_create", session.userId);
-  saveState();
+  state2.events.push(event);
+  addLog2(`Event created: ${title}`, "event_create", session.userId);
+  saveState2();
   res.json({ status: "success", event });
 });
 app.post("/api/events/:id/attend", (req, res) => {
   const session = requireSession(req, res);
   if (!session) return;
-  const event = state.events.find((e) => e.id === req.params.id);
+  const event = state2.events.find((e) => e.id === req.params.id);
   if (!event) {
     res.status(404).json({ error: "Event not found" });
     return;
   }
   event.attendeeCount = (event.attendeeCount || 0) + 1;
-  saveState();
+  saveState2();
   res.json({ status: "success" });
 });
 app.post("/api/messages/send", (req, res) => {
@@ -1638,27 +1995,27 @@ app.post("/api/messages/send", (req, res) => {
     read: false,
     createdAt: (/* @__PURE__ */ new Date()).toISOString()
   };
-  state.messages.push(msg);
-  saveState();
+  state2.messages.push(msg);
+  saveState2();
   res.json({ status: "success", message: msg });
 });
 app.get("/api/messages/:userId", (req, res) => {
-  const session = getSession(req);
+  const session = getSession2(req);
   const { userId } = req.params;
   if (!session || session.userId !== userId && session.role !== "admin" && session.role !== "super_admin") {
     res.status(403).json({ error: "Access denied" });
     return;
   }
-  const msgs = state.messages.filter((m) => m.toUserId === userId || m.fromUserId === userId);
+  const msgs = state2.messages.filter((m) => m.toUserId === userId || m.fromUserId === userId);
   res.json({ messages: msgs });
 });
 app.post("/api/messages/:id/read", (req, res) => {
   const session = requireSession(req, res);
   if (!session) return;
-  const msg = state.messages.find((m) => m.id === req.params.id && m.toUserId === session.userId);
+  const msg = state2.messages.find((m) => m.id === req.params.id && m.toUserId === session.userId);
   if (msg) {
     msg.read = true;
-    saveState();
+    saveState2();
   }
   res.json({ status: "success" });
 });
@@ -1711,10 +2068,10 @@ function ensureCmsPages(cms) {
   return { ...cms || {}, pages: [...pages, ...customPages] };
 }
 app.get("/api/site-notice", (_req, res) => {
-  res.json(state.siteNotice || null);
+  res.json(state2.siteNotice || null);
 });
 app.put("/api/site-notice", (req, res) => {
-  const session = requireAdmin(req, res);
+  const session = requireAdminSession(req, res);
   if (!session) return;
   const title = String(req.body?.title || "Site Notice").trim().slice(0, 120);
   const message = String(req.body?.message || "").trim().slice(0, 500);
@@ -1725,8 +2082,8 @@ app.put("/api/site-notice", (req, res) => {
     res.status(400).json({ error: "A bulletin message is required when the notice is enabled" });
     return;
   }
-  const user = state.users.find((u) => u.id === session.userId);
-  state.siteNotice = {
+  const user = state2.users.find((u) => u.id === session.userId);
+  state2.siteNotice = {
     id: "site_notice",
     title: title || "Site Notice",
     message,
@@ -1738,23 +2095,23 @@ app.put("/api/site-notice", (req, res) => {
     updatedByName: user?.name || session.email,
     updatedByRole: session.role
   };
-  addLog(`${enabled ? "Site bulletin published" : "Site bulletin disabled"} by ${user?.name || session.email}`, "site_notice", session.userId);
-  saveState();
-  res.json({ status: "success", notice: state.siteNotice });
+  addLog2(`${enabled ? "Site bulletin published" : "Site bulletin disabled"} by ${user?.name || session.email}`, "site_notice", session.userId);
+  saveState2();
+  res.json({ status: "success", notice: state2.siteNotice });
 });
 app.delete("/api/site-notice", (req, res) => {
-  const session = requireAdmin(req, res);
+  const session = requireAdminSession(req, res);
   if (!session) return;
-  state.siteNotice = null;
-  addLog(`Site bulletin cleared by ${session.email}`, "site_notice", session.userId);
-  saveState();
+  state2.siteNotice = null;
+  addLog2(`Site bulletin cleared by ${session.email}`, "site_notice", session.userId);
+  saveState2();
   res.json({ status: "success" });
 });
 app.get("/api/cms", (_req, res) => {
-  res.json(ensureCmsPages(state.cmsContent || { pages: DEFAULT_CMS_PAGES }));
+  res.json(ensureCmsPages(state2.cmsContent || { pages: DEFAULT_CMS_PAGES }));
 });
 app.post("/api/cms/update", (req, res) => {
-  const session = requireAdmin(req, res);
+  const session = requireAdminSession(req, res);
   if (!session) return;
   const pages = req.body?.pages || req.body?.cmsData?.pages;
   if (!Array.isArray(pages)) {
@@ -1765,19 +2122,19 @@ app.post("/api/cms/update", (req, res) => {
     res.status(413).json({ error: "CMS content is too large" });
     return;
   }
-  state.cmsContent = ensureCmsPages({ pages });
-  addLog("CMS content updated", "cms_update", session.userId);
-  saveState();
-  res.json({ status: "success", cmsContent: state.cmsContent });
+  state2.cmsContent = ensureCmsPages({ pages });
+  addLog2("CMS content updated", "cms_update", session.userId);
+  saveState2();
+  res.json({ status: "success", cmsContent: state2.cmsContent });
 });
 app.get("/api/theme", (_req, res) => {
-  res.json(state.themeSettings || null);
+  res.json(state2.themeSettings || null);
 });
 app.post("/api/theme", (req, res) => {
-  const session = requireAdmin(req, res);
+  const session = requireAdminSession(req, res);
   if (!session) return;
-  state.themeSettings = req.body;
-  saveState();
+  state2.themeSettings = req.body;
+  saveState2();
   res.json({ status: "success" });
 });
 app.get("/api/revenue/:instructorId", (req, res) => {
@@ -1789,11 +2146,11 @@ app.get("/api/revenue/:instructorId", (req, res) => {
     res.status(403).json({ error: "Access denied" });
     return;
   }
-  const courses = state.courses.filter((c) => c.instructorId === instructorId);
+  const courses = state2.courses.filter((c) => c.instructorId === instructorId);
   const totalRevenue = courses.reduce((sum, c) => sum + (c.enrollmentCount || 0) * (c.price || 0), 0);
-  const withdrawals = state.withdrawalRequests.filter((w) => w.instructorId === instructorId);
+  const withdrawals = state2.withdrawalRequests.filter((w) => w.instructorId === instructorId);
   const totalWithdrawn = withdrawals.filter((w) => w.status === "approved").reduce((s, w) => s + w.amount, 0);
-  const bank = state.bankAccounts.find((b) => b.instructorId === instructorId) || null;
+  const bank = state2.bankAccounts.find((b) => b.instructorId === instructorId) || null;
   res.json({ totalRevenue, totalWithdrawn, bank, withdrawals, platformShare: 0.3, instructorShare: 0.7 });
 });
 app.post("/api/revenue/add-bank", (req, res) => {
@@ -1809,11 +2166,11 @@ app.post("/api/revenue/add-bank", (req, res) => {
     /./g,
     (c, i) => i < accountNumber.length - 4 ? "*" : c
   );
-  const idx = state.bankAccounts.findIndex((b) => b.instructorId === instructorId);
+  const idx = state2.bankAccounts.findIndex((b) => b.instructorId === instructorId);
   const bankData = { id: `bank_${Date.now()}`, instructorId, bankName, accountName, accountNumber: masked, routingCode, country };
-  if (idx >= 0) state.bankAccounts[idx] = bankData;
-  else state.bankAccounts.push(bankData);
-  saveState();
+  if (idx >= 0) state2.bankAccounts[idx] = bankData;
+  else state2.bankAccounts.push(bankData);
+  saveState2();
   res.json({ status: "success" });
 });
 app.post("/api/revenue/withdraw", (req, res) => {
@@ -1825,10 +2182,10 @@ app.post("/api/revenue/withdraw", (req, res) => {
     res.status(403).json({ error: "Access denied" });
     return;
   }
-  const courses = state.courses.filter((c) => c.instructorId === instructorId);
+  const courses = state2.courses.filter((c) => c.instructorId === instructorId);
   const totalRevenue = courses.reduce((sum, c) => sum + (c.enrollmentCount || 0) * (c.price || 0), 0);
   const instructorBalance = totalRevenue * 0.7;
-  const withdrawals = state.withdrawalRequests.filter((w) => w.instructorId === instructorId && w.status !== "rejected");
+  const withdrawals = state2.withdrawalRequests.filter((w) => w.instructorId === instructorId && w.status !== "rejected");
   const alreadyWithdrawn = withdrawals.reduce((s, w) => s + w.amount, 0);
   const available = instructorBalance - alreadyWithdrawn;
   if (amount > available) {
@@ -1836,21 +2193,21 @@ app.post("/api/revenue/withdraw", (req, res) => {
     return;
   }
   const wr = { id: `wr_${Date.now()}`, instructorId, instructorName, amount, status: "pending", createdAt: (/* @__PURE__ */ new Date()).toISOString() };
-  state.withdrawalRequests.push(wr);
-  saveState();
+  state2.withdrawalRequests.push(wr);
+  saveState2();
   res.json({ status: "success" });
 });
 app.post("/api/revenue/approve-withdrawal", (req, res) => {
-  const session = requireAdmin(req, res);
+  const session = requireAdminSession(req, res);
   if (!session) return;
   const { requestId } = req.body;
-  const wr = state.withdrawalRequests.find((w) => w.id === requestId);
+  const wr = state2.withdrawalRequests.find((w) => w.id === requestId);
   if (!wr) {
     res.status(404).json({ error: "Request not found" });
     return;
   }
   wr.status = "approved";
-  saveState();
+  saveState2();
   res.json({ status: "success" });
 });
 app.post("/api/assignments/submit", (req, res) => {
@@ -1867,29 +2224,29 @@ app.post("/api/assignments/submit", (req, res) => {
     feedback: null,
     submittedAt: (/* @__PURE__ */ new Date()).toISOString()
   };
-  state.assignmentSubmissions.push(sub);
-  saveState();
+  state2.assignmentSubmissions.push(sub);
+  saveState2();
   res.json({ status: "success", submission: sub });
 });
 app.post("/api/assignments/grade", (req, res) => {
-  const session = requireAdmin(req, res);
+  const session = requireAdminSession(req, res);
   if (!session) return;
   const { submissionId, grade, feedback } = req.body;
-  const sub = state.assignmentSubmissions.find((s) => s.id === submissionId);
+  const sub = state2.assignmentSubmissions.find((s) => s.id === submissionId);
   if (!sub) {
     res.status(404).json({ error: "Submission not found" });
     return;
   }
   sub.grade = grade;
   sub.feedback = feedback || "";
-  saveState();
+  saveState2();
   res.json({ status: "success" });
 });
 app.get("/api/assignments/instructor/:instructorId", (req, res) => {
   const session = requireSession(req, res);
   if (!session) return;
-  const courses = state.courses.filter((c) => c.instructorId === req.params.instructorId).map((c) => c.id);
-  const subs = state.assignmentSubmissions.filter((s) => courses.includes(s.courseId));
+  const courses = state2.courses.filter((c) => c.instructorId === req.params.instructorId).map((c) => c.id);
+  const subs = state2.assignmentSubmissions.filter((s) => courses.includes(s.courseId));
   res.json({ submissions: subs });
 });
 app.get("/api/assignments/student/:studentId", (req, res) => {
@@ -1899,7 +2256,7 @@ app.get("/api/assignments/student/:studentId", (req, res) => {
     res.status(403).json({ error: "Access denied" });
     return;
   }
-  const subs = state.assignmentSubmissions.filter((s) => s.studentId === req.params.studentId);
+  const subs = state2.assignmentSubmissions.filter((s) => s.studentId === req.params.studentId);
   res.json({ submissions: subs });
 });
 app.post("/api/gemini/tutor", async (req, res) => {
@@ -1956,14 +2313,14 @@ app.get("/api/quiz/attempts/:userId", (req, res) => {
     res.status(403).json({ error: "Access denied" });
     return;
   }
-  const attempts = state.quizAttempts.filter((a) => a.userId === req.params.userId);
+  const attempts = state2.quizAttempts.filter((a) => a.userId === req.params.userId);
   res.json({ attempts });
 });
 app.post("/api/quiz/attempt", (req, res) => {
   const session = requireSession(req, res);
   if (!session) return;
   const { courseId, quizId, answers, timeTaken } = req.body;
-  const course = state.courses.find((c) => c.id === courseId);
+  const course = state2.courses.find((c) => c.id === courseId);
   const quiz = (course?.quizzes || []).find((q) => q.id === quizId);
   if (!quiz) {
     res.status(404).json({ error: "Quiz not found" });
@@ -1993,37 +2350,37 @@ app.post("/api/quiz/attempt", (req, res) => {
     timeTaken: timeTaken || 0,
     attemptedAt: (/* @__PURE__ */ new Date()).toISOString()
   };
-  state.quizAttempts.push(attempt);
-  const enrollment = state.enrollments.find((e) => e.userId === session.userId && e.courseId === courseId);
+  state2.quizAttempts.push(attempt);
+  const enrollment = state2.enrollments.find((e) => e.userId === session.userId && e.courseId === courseId);
   if (enrollment) {
     if (!enrollment.quizAttempts) enrollment.quizAttempts = {};
     enrollment.quizAttempts[quizId] = { score, passed, attemptedAt: attempt.attemptedAt };
   }
-  addLog(`Quiz attempt: ${quiz.title} \u2014 ${score}%`, "quiz", session.userId);
-  saveState();
+  addLog2(`Quiz attempt: ${quiz.title} \u2014 ${score}%`, "quiz", session.userId);
+  saveState2();
   res.json({ status: "success", attempt: { ...attempt, breakdown: publicBreakdown } });
 });
 app.get("/api/quiz/analytics", (req, res) => {
-  const session = requireAdmin(req, res);
+  const session = requireAdminSession(req, res);
   if (!session) return;
-  const totalAttempts = state.quizAttempts.length;
-  const passed = state.quizAttempts.filter((a) => a.passed).length;
-  const avgScore = totalAttempts > 0 ? Math.round(state.quizAttempts.reduce((s, a) => s + a.score, 0) / totalAttempts) : 0;
+  const totalAttempts = state2.quizAttempts.length;
+  const passed = state2.quizAttempts.filter((a) => a.passed).length;
+  const avgScore = totalAttempts > 0 ? Math.round(state2.quizAttempts.reduce((s, a) => s + a.score, 0) / totalAttempts) : 0;
   const byQuiz = {};
-  for (const a of state.quizAttempts) {
+  for (const a of state2.quizAttempts) {
     if (!byQuiz[a.quizId]) byQuiz[a.quizId] = { title: a.quizTitle, attempts: 0, passed: 0, totalScore: 0 };
     byQuiz[a.quizId].attempts++;
     if (a.passed) byQuiz[a.quizId].passed++;
     byQuiz[a.quizId].totalScore += a.score;
   }
   const quizStats = Object.values(byQuiz).map((q) => ({ ...q, avgScore: Math.round(q.totalScore / q.attempts) }));
-  res.json({ totalAttempts, passed, failed: totalAttempts - passed, avgScore, quizStats, recentAttempts: state.quizAttempts.slice(-20).reverse() });
+  res.json({ totalAttempts, passed, failed: totalAttempts - passed, avgScore, quizStats, recentAttempts: state2.quizAttempts.slice(-20).reverse() });
 });
 app.get("/api/exams", (req, res) => {
-  const session = getSession(req);
+  const session = getSession2(req);
   const isAdmin = session && (session.role === "admin" || session.role === "super_admin");
   const isInstructor = session?.role === "instructor";
-  const visible = isAdmin ? state.exams : state.exams.filter((e) => e.isPublished);
+  const visible = isAdmin ? state2.exams : state2.exams.filter((e) => e.isPublished);
   const exams = visible.map(
     (e) => safeExam(e, !!(isAdmin || isInstructor && e.createdBy === session?.userId))
   );
@@ -2041,7 +2398,7 @@ app.post("/api/exams/create", (req, res) => {
     res.status(400).json({ error: "title and questions required" });
     return;
   }
-  const user = state.users.find((u) => u.id === session.userId);
+  const user = state2.users.find((u) => u.id === session.userId);
   const exam = {
     id: `exam_${Date.now()}`,
     title,
@@ -2056,15 +2413,15 @@ app.post("/api/exams/create", (req, res) => {
     createdByName: user?.name || "Instructor",
     createdAt: (/* @__PURE__ */ new Date()).toISOString()
   };
-  state.exams.push(exam);
-  addLog(`Exam created: ${title}`, "exam_create", session.userId);
-  saveState();
+  state2.exams.push(exam);
+  addLog2(`Exam created: ${title}`, "exam_create", session.userId);
+  saveState2();
   res.json({ status: "success", exam });
 });
 app.put("/api/exams/:id", (req, res) => {
   const session = requireSession(req, res);
   if (!session) return;
-  const exam = state.exams.find((e) => e.id === req.params.id);
+  const exam = state2.exams.find((e) => e.id === req.params.id);
   if (!exam) {
     res.status(404).json({ error: "Exam not found" });
     return;
@@ -2077,25 +2434,25 @@ app.put("/api/exams/:id", (req, res) => {
   for (const key of allowed) {
     if (req.body[key] !== void 0) exam[key] = req.body[key];
   }
-  saveState();
+  saveState2();
   res.json({ status: "success", exam });
 });
 app.delete("/api/exams/:id", (req, res) => {
-  const session = requireAdmin(req, res);
+  const session = requireAdminSession(req, res);
   if (!session) return;
-  const idx = state.exams.findIndex((e) => e.id === req.params.id);
+  const idx = state2.exams.findIndex((e) => e.id === req.params.id);
   if (idx === -1) {
     res.status(404).json({ error: "Exam not found" });
     return;
   }
-  state.exams.splice(idx, 1);
-  saveState();
+  state2.exams.splice(idx, 1);
+  saveState2();
   res.json({ status: "success" });
 });
 app.post("/api/exams/:id/attempt", (req, res) => {
   const session = requireSession(req, res);
   if (!session) return;
-  const exam = state.exams.find((e) => e.id === req.params.id);
+  const exam = state2.exams.find((e) => e.id === req.params.id);
   if (!exam) {
     res.status(404).json({ error: "Exam not found" });
     return;
@@ -2123,9 +2480,9 @@ app.post("/api/exams/:id/attempt", (req, res) => {
     timeTaken: timeTaken || 0,
     attemptedAt: (/* @__PURE__ */ new Date()).toISOString()
   };
-  state.examAttempts.push(attempt);
-  addLog(`Exam attempt: ${exam.title} \u2014 ${score}% (${passed ? "PASS" : "FAIL"})`, "exam", session.userId);
-  saveState();
+  state2.examAttempts.push(attempt);
+  addLog2(`Exam attempt: ${exam.title} \u2014 ${score}% (${passed ? "PASS" : "FAIL"})`, "exam", session.userId);
+  saveState2();
   res.json({ status: "success", attempt: { ...attempt, breakdown: publicBreakdown } });
 });
 app.get("/api/exams/results/:userId", (req, res) => {
@@ -2135,13 +2492,13 @@ app.get("/api/exams/results/:userId", (req, res) => {
     res.status(403).json({ error: "Access denied" });
     return;
   }
-  const results = state.examAttempts.filter((a) => a.userId === req.params.userId);
+  const results = state2.examAttempts.filter((a) => a.userId === req.params.userId);
   res.json({ results });
 });
 app.get("/api/exams/all-results", (req, res) => {
-  const session = requireAdmin(req, res);
+  const session = requireAdminSession(req, res);
   if (!session) return;
-  res.json({ results: state.examAttempts });
+  res.json({ results: state2.examAttempts });
 });
 app.get("/api/certificates/user/:userId", (req, res) => {
   const session = requireSession(req, res);
@@ -2150,19 +2507,19 @@ app.get("/api/certificates/user/:userId", (req, res) => {
     res.status(403).json({ error: "Access denied" });
     return;
   }
-  const certs = state.certificates.filter((c) => c.userId === req.params.userId);
+  const certs = state2.certificates.filter((c) => c.userId === req.params.userId);
   res.json({ certificates: certs });
 });
 app.get("/api/certificates/all", (req, res) => {
-  const session = requireAdmin(req, res);
+  const session = requireAdminSession(req, res);
   if (!session) return;
-  res.json({ certificates: state.certificates });
+  res.json({ certificates: state2.certificates });
 });
 app.post("/api/certificates/generate", (req, res) => {
   const session = requireSession(req, res);
   if (!session) return;
   const { courseId, templateId } = req.body;
-  const enrollment = state.enrollments.find((e) => e.userId === session.userId && e.courseId === courseId);
+  const enrollment = state2.enrollments.find((e) => e.userId === session.userId && e.courseId === courseId);
   if (!enrollment) {
     res.status(400).json({ error: "Not enrolled in this course" });
     return;
@@ -2171,14 +2528,14 @@ app.post("/api/certificates/generate", (req, res) => {
     res.status(400).json({ error: "Course not completed yet" });
     return;
   }
-  const existing = state.certificates.find((c) => c.userId === session.userId && c.courseId === courseId);
+  const existing = state2.certificates.find((c) => c.userId === session.userId && c.courseId === courseId);
   if (existing) {
     res.json({ status: "already_exists", certificate: existing });
     return;
   }
-  const user = state.users.find((u) => u.id === session.userId);
-  const course = state.courses.find((c) => c.id === courseId);
-  const template = state.certTemplates.find((t) => t.id === templateId) || state.certTemplates.find((t) => t.isDefault) || state.certTemplates[0];
+  const user = state2.users.find((u) => u.id === session.userId);
+  const course = state2.courses.find((c) => c.id === courseId);
+  const template = state2.certTemplates.find((t) => t.id === templateId) || state2.certTemplates.find((t) => t.isDefault) || state2.certTemplates[0];
   const certId = `cert_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
   const cert = {
     id: certId,
@@ -2195,27 +2552,27 @@ app.post("/api/certificates/generate", (req, res) => {
       return scores.length > 0 ? Math.round(scores.reduce((s, v) => s + v, 0) / scores.length) : null;
     })() : null
   };
-  state.certificates.push(cert);
+  state2.certificates.push(cert);
   enrollment.certificateId = certId;
-  addLog(`Certificate issued: ${course?.title} \u2192 ${user?.name}`, "certificate", session.userId);
-  saveState();
+  addLog2(`Certificate issued: ${course?.title} \u2192 ${user?.name}`, "certificate", session.userId);
+  saveState2();
   res.json({ status: "success", certificate: cert });
 });
 app.get("/api/certificates/verify/:certId", (req, res) => {
-  const cert = state.certificates.find((c) => c.id === req.params.certId);
+  const cert = state2.certificates.find((c) => c.id === req.params.certId);
   if (!cert) {
     res.status(404).json({ error: "Certificate not found", valid: false });
     return;
   }
-  const user = state.users.find((u) => u.id === cert.userId);
-  const course = state.courses.find((c) => c.id === cert.courseId);
+  const user = state2.users.find((u) => u.id === cert.userId);
+  const course = state2.courses.find((c) => c.id === cert.courseId);
   res.json({ valid: true, certificate: { ...cert, userName: user?.name || cert.userName, courseTitle: course?.title || cert.courseTitle } });
 });
 app.get("/api/certificates/templates", (req, res) => {
-  res.json({ templates: state.certTemplates });
+  res.json({ templates: state2.certTemplates });
 });
 app.post("/api/certificates/templates", (req, res) => {
-  const session = requireAdmin(req, res);
+  const session = requireAdminSession(req, res);
   if (!session) return;
   const { name, style, primaryColor, accentColor, headerText, footerText, signatureLabel, logoEnabled, badgeEnabled } = req.body;
   if (!name) {
@@ -2236,58 +2593,58 @@ app.post("/api/certificates/templates", (req, res) => {
     isDefault: false,
     createdAt: (/* @__PURE__ */ new Date()).toISOString()
   };
-  state.certTemplates.push(tmpl);
-  addLog(`Certificate template created: ${name}`, "cert_template", session.userId);
-  saveState();
+  state2.certTemplates.push(tmpl);
+  addLog2(`Certificate template created: ${name}`, "cert_template", session.userId);
+  saveState2();
   res.json({ status: "success", template: tmpl });
 });
 app.put("/api/certificates/templates/:id", (req, res) => {
-  const session = requireAdmin(req, res);
+  const session = requireAdminSession(req, res);
   if (!session) return;
-  const tmpl = state.certTemplates.find((t) => t.id === req.params.id);
+  const tmpl = state2.certTemplates.find((t) => t.id === req.params.id);
   if (!tmpl) {
     res.status(404).json({ error: "Template not found" });
     return;
   }
   const allowed = ["name", "style", "primaryColor", "accentColor", "headerText", "footerText", "signatureLabel", "logoEnabled", "badgeEnabled", "isDefault"];
   if (req.body.isDefault) {
-    state.certTemplates.forEach((t) => {
+    state2.certTemplates.forEach((t) => {
       t.isDefault = false;
     });
   }
   for (const key of allowed) {
     if (req.body[key] !== void 0) tmpl[key] = req.body[key];
   }
-  saveState();
+  saveState2();
   res.json({ status: "success", template: tmpl });
 });
 app.delete("/api/certificates/templates/:id", (req, res) => {
-  const session = requireAdmin(req, res);
+  const session = requireAdminSession(req, res);
   if (!session) return;
-  const idx = state.certTemplates.findIndex((t) => t.id === req.params.id);
+  const idx = state2.certTemplates.findIndex((t) => t.id === req.params.id);
   if (idx === -1) {
     res.status(404).json({ error: "Template not found" });
     return;
   }
-  if (state.certTemplates[idx].isDefault) {
+  if (state2.certTemplates[idx].isDefault) {
     res.status(400).json({ error: "Cannot delete the default template" });
     return;
   }
-  state.certTemplates.splice(idx, 1);
-  saveState();
+  state2.certTemplates.splice(idx, 1);
+  saveState2();
   res.json({ status: "success" });
 });
 app.post("/api/certificates/download/:certId", (req, res) => {
   const session = requireSession(req, res);
   if (!session) return;
-  const cert = state.certificates.find((c) => c.id === req.params.certId);
+  const cert = state2.certificates.find((c) => c.id === req.params.certId);
   if (!cert) {
     res.status(404).json({ error: "Certificate not found" });
     return;
   }
   const record = { id: `dl_${Date.now()}`, certId: cert.id, userId: session.userId, userName: cert.userName, courseTitle: cert.courseTitle, downloadedAt: (/* @__PURE__ */ new Date()).toISOString() };
-  state.certDownloadHistory.push(record);
-  saveState();
+  state2.certDownloadHistory.push(record);
+  saveState2();
   res.json({ status: "success", record });
 });
 app.get("/api/certificates/download-history/:userId", (req, res) => {
@@ -2298,7 +2655,7 @@ app.get("/api/certificates/download-history/:userId", (req, res) => {
     res.status(403).json({ error: "Access denied" });
     return;
   }
-  const history = isAdmin && req.params.userId === "all" ? state.certDownloadHistory : state.certDownloadHistory.filter((d) => d.userId === req.params.userId);
+  const history = isAdmin && req.params.userId === "all" ? state2.certDownloadHistory : state2.certDownloadHistory.filter((d) => d.userId === req.params.userId);
   res.json({ history });
 });
 app.post("/api/assignments/add-feedback", (req, res) => {
@@ -2309,7 +2666,7 @@ app.post("/api/assignments/add-feedback", (req, res) => {
     return;
   }
   const { submissionId, grade, feedback } = req.body;
-  const sub = state.assignmentSubmissions.find((s) => s.id === submissionId);
+  const sub = state2.assignmentSubmissions.find((s) => s.id === submissionId);
   if (!sub) {
     res.status(404).json({ error: "Submission not found" });
     return;
@@ -2318,14 +2675,14 @@ app.post("/api/assignments/add-feedback", (req, res) => {
   sub.feedback = feedback || "";
   sub.gradedAt = (/* @__PURE__ */ new Date()).toISOString();
   sub.gradedBy = session.userId;
-  addLog(`Assignment graded: submission ${submissionId}`, "assignment_grade", session.userId);
-  saveState();
+  addLog2(`Assignment graded: submission ${submissionId}`, "assignment_grade", session.userId);
+  saveState2();
   res.json({ status: "success", submission: sub });
 });
 app.get("/api/assignments/submissions/course/:courseId", (req, res) => {
   const session = requireSession(req, res);
   if (!session) return;
-  const subs = state.assignmentSubmissions.filter((s) => s.courseId === req.params.courseId);
+  const subs = state2.assignmentSubmissions.filter((s) => s.courseId === req.params.courseId);
   res.json({ submissions: subs });
 });
 app.get("/drive-callback", (_req, res) => {
@@ -2347,7 +2704,7 @@ async function startServer() {
     });
     sendContactAckEmail("info@digitalmanufacturing.academy", `[Contact from ${name}]`, message).catch(() => {
     });
-    addLog(`Contact form submitted by: ${name} <${email}>`, "contact", "guest");
+    addLog2(`Contact form submitted by: ${name} <${email}>`, "contact", "guest");
     res.json({ status: "success" });
   });
   const _startTime = Date.now();
@@ -2358,17 +2715,17 @@ async function startServer() {
       status: "ok",
       storage: isDatabaseAvailable() ? "postgresql" : "json",
       database: isDatabaseAvailable(),
-      users: state.users.length,
-      courses: state.courses.length,
+      users: state2.users.length,
+      courses: state2.courses.length,
       uptime: uptimeStr,
       env: process.env.NODE_ENV || "development",
       ts: (/* @__PURE__ */ new Date()).toISOString()
     });
   });
-  const distPath = import_path.default.join(process.cwd(), "dist");
-  app.use(import_express.default.static(distPath, { maxAge: 0 }));
+  const distPath = import_path2.default.join(process.cwd(), "dist");
+  app.use(import_express2.default.static(distPath, { maxAge: 0 }));
   app.get("*", (_req, res) => {
-    res.sendFile(import_path.default.join(distPath, "index.html"));
+    res.sendFile(import_path2.default.join(distPath, "index.html"));
   });
   app.use((err, _req, res, _next) => {
     const ref = `err_${Date.now()}`;
@@ -2376,10 +2733,25 @@ async function startServer() {
     const detail = isProd ? void 0 : err.message;
     res.status(500).json({ error: "Internal server error", ref, ...detail ? { detail } : {} });
   });
-  app.listen(PORT, "0.0.0.0", () => {
+  const httpServer = app.listen(PORT, "0.0.0.0", () => {
     console.log(`[DMA SERVER] Academy running on http://0.0.0.0:${PORT}`);
     console.log(`[DMA SERVER] Storage: ${isDatabaseAvailable() ? "PostgreSQL" : "local JSON (development only)"}`);
   });
+  const shutdown = (signal) => {
+    console.info(`[DMA SERVER] Received ${signal}; waiting for requests and database writes to finish`);
+    httpServer.close((error) => {
+      if (error) {
+        console.error("[DMA SERVER] Error while closing HTTP server", error);
+        process.exitCode = 1;
+      }
+      disconnectDatabase().catch((error2) => {
+        console.error("[DB] Error while closing PostgreSQL connection", error2);
+        process.exitCode = 1;
+      });
+    });
+  };
+  process.once("SIGTERM", shutdown);
+  process.once("SIGINT", shutdown);
 }
 var _errorCounts = {};
 function recordError(label, err) {
@@ -2388,7 +2760,7 @@ function recordError(label, err) {
   _errorCounts[key] = (_errorCounts[key] || 0) + 1;
   if (_errorCounts[key] === 1 || _errorCounts[key] % 60 === 0) {
     console.error(`[DMA][${label}] (\xD7${_errorCounts[key]}) ${msg}`, err instanceof Error ? err.stack : "");
-    addLog(`Server error [${label}]: ${msg}`, "server_error");
+    addLog2(`Server error [${label}]: ${msg}`, "server_error");
   }
 }
 process.on("uncaughtException", (err) => recordError("uncaughtException", err));
