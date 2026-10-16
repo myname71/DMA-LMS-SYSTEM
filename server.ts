@@ -6,6 +6,8 @@ import cookieParser from "cookie-parser";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
+import repositoryRouter from "./routes/repository";
+import rateLimit from "express-rate-limit";
 import { GoogleGenAI } from "@google/genai";
 import {
   connectDatabase,
@@ -302,10 +304,20 @@ function safeExam(exam: any, privileged = false): any {
 const app = express();
 app.use(express.json({ limit: "10mb" }));
 app.use(cookieParser());
+app.use("/api/repository", repositoryRouter);
+
+// ─── Rate limiting ─────────────────────────────────────────────────────────────
+const authRateLimit = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many requests, please try again after 15 minutes." },
+});
 
 // ─── Auth Routes ──────────────────────────────────────────────────────────────
 
-app.post("/api/auth/register", async (req: Request, res: Response) => {
+app.post("/api/auth/register", authRateLimit, async (req: Request, res: Response) => {
   try {
     const { name, email, role, password, inviteToken, bio, specialization, qualificationDoc, subscriptionPlan } = req.body;
     if (!name || !email) { res.status(400).json({ error: "name and email are required" }); return; }
@@ -352,7 +364,7 @@ app.post("/api/auth/register", async (req: Request, res: Response) => {
   }
 });
 
-app.post("/api/auth/login", async (req: Request, res: Response) => {
+app.post("/api/auth/login", authRateLimit, async (req: Request, res: Response) => {
   try {
     const { email, password } = req.body;
     if (!email || !password) { res.status(400).json({ error: "email and password are required" }); return; }
@@ -385,12 +397,12 @@ app.post("/api/auth/login", async (req: Request, res: Response) => {
   }
 });
 
-app.post("/api/auth/logout", (_req: Request, res: Response) => {
+app.post("/api/auth/logout", authRateLimit, (_req: Request, res: Response) => {
   res.clearCookie(COOKIE_NAME, { path: "/" });
   res.json({ status: "success" });
 });
 
-app.get("/api/auth/me", (req: Request, res: Response) => {
+app.get("/api/auth/me", authRateLimit, (req: Request, res: Response) => {
   const session = getSession(req);
   if (!session) { res.status(401).json({ error: "Not authenticated" }); return; }
   const user = state.users.find((u: any) => u.id === session.userId);
@@ -398,7 +410,7 @@ app.get("/api/auth/me", (req: Request, res: Response) => {
   res.json({ status: "success", user: safeUser(user) });
 });
 
-app.post("/api/auth/change-password", async (req: Request, res: Response) => {
+app.post("/api/auth/change-password", authRateLimit, async (req: Request, res: Response) => {
   const session = requireSession(req, res);
   if (!session) return;
   const { currentPassword, newPassword } = req.body;
@@ -415,7 +427,7 @@ app.post("/api/auth/change-password", async (req: Request, res: Response) => {
 
 // ─── Forgot / Reset Password ─────────────────────────────────────────────────
 
-app.post("/api/auth/forgot-password", async (req: Request, res: Response) => {
+app.post("/api/auth/forgot-password", authRateLimit, async (req: Request, res: Response) => {
   try {
     const { email } = req.body;
     if (!email) { res.status(400).json({ error: "Email is required" }); return; }
@@ -440,7 +452,7 @@ app.post("/api/auth/forgot-password", async (req: Request, res: Response) => {
   }
 });
 
-app.post("/api/auth/reset-password", async (req: Request, res: Response) => {
+app.post("/api/auth/reset-password", authRateLimit, async (req: Request, res: Response) => {
   try {
     const { token, password } = req.body;
     if (!token || !password) { res.status(400).json({ error: "Token and new password are required" }); return; }
@@ -751,7 +763,11 @@ app.get("/api/db-state", (req: Request, res: Response) => {
       .filter((c: any) => isAdmin || c.isPublished !== false)
       .map((c: any) => safeCourse(c, isAdmin || (isInstructor && c.instructorId === session?.userId))),
     enrollments: session ? state.enrollments.filter((e: any) => isAdmin || e.userId === session.userId) : [],
-    certificates: state.certificates || [],
+    certificates: session
+      ? (isAdmin
+          ? state.certificates || []
+          : (state.certificates || []).filter((c: any) => c.userId === session.userId))
+      : [],
     learningPaths: state.learningPaths,
     events: state.events,
     logs: isAdmin ? state.logs : [],

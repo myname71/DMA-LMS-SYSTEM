@@ -1,6 +1,6 @@
-# Hostinger deployment guide (Node 20 friendly)
+# Hostinger deployment guide (Node 22 friendly)
 
-This guide explains how to deploy DMA-LMS-SYSTEM to Hostinger and how to run Prisma with Supabase. You asked to remain on Node 20 for runtime; the recommended approach when Node 20 shows compatibility issues is to build locally (or in CI) with Node 22 and upload the artifacts. Below are both workflows.
+This guide explains how to deploy DMA-LMS-SYSTEM to Hostinger and how to run Prisma with Supabase.Run on Node 22 for runtime; the recommended approach when Node 20 shows compatibility issues is to build locally (or in CI) with Node 22 and upload the artifacts. Below are both workflows.
 
 ## Quick summary (recommended)
 - Build the project locally (or in CI) and upload the built artifacts to Hostinger. This avoids runtime/package engine problems on Node 20.
@@ -17,7 +17,7 @@ This guide explains how to deploy DMA-LMS-SYSTEM to Hostinger and how to run Pri
 - SEED_ADMIN_EMAIL, SEED_ADMIN_PASSWORD, SEED_SUPER_ADMIN_EMAIL, SEED_SUPER_ADMIN_PASSWORD
 - SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, EMAIL_FROM_NAME
 
-## Workflow A — Build locally / in CI and upload (recommended when Hostinger Node is 20)
+## Workflow A — Build locally / in CI and upload (recommended when Hostinger Node is 22)
 1. Use a local machine or CI to build (Node 22 recommended here to avoid package engine issues):
    - nvm install 22 && nvm use 22
    - copy `.env.example` → `.env` and fill values (do NOT commit `.env`)
@@ -44,7 +44,7 @@ This guide explains how to deploy DMA-LMS-SYSTEM to Hostinger and how to run Pri
    - App should be started automatically by Hostinger. If needed: npm start
 
 ## Workflow B — Build on Hostinger (Node 20 runtime and build)
-If you must build on Hostinger and the panel provides only Node 20, do the following but expect possible package/engine issues.
+If you must build on Hostinger and the panel provides only Node 22, do the following but expect possible package/engine issues.
 
 1. Set the environment variables in Hostinger panel (as above).
 2. In Hostinger Terminal:
@@ -73,7 +73,7 @@ Notes:
 - Engine warnings: if `npm ci` warns about engines but succeeds, test `npm run build` — runtime failures are possible.
 - If specific packages (e.g., `@supabase/*`) require Node >=22, you can:
   - Option 1: Build locally with Node 22 and upload artifacts (recommended).
-  - Option 2: Pin package versions that support Node 20 (requires testing). Example approach:
+  - Option 2: Pin package versions that support Node 22 (requires testing). Example approach:
     - Identify package and version from error output.
     - Set an explicit compatible version in `package.json`.
     - rm -rf node_modules package-lock.json
@@ -88,13 +88,13 @@ Notes:
 - Startup file: app.js
 - Install command (Terminal): npm ci --omit=dev
 - Start command: npm start (Hostinger will manage process lifecycle)
-- Node version: choose the highest available; if only 20 is present, use Workflow A to upload built artifacts.
+- Node version: choose the highest available; if only 22 is present, use Workflow A to upload built artifacts.
 
 ---
 
 If you want, I can commit the following helper files to the repo now:
 - `.env.production.example` (placeholders only)
-- `.nvmrc` (set to 20 as you requested)
+- `.nvmrc` (set to 22 as you requested)
 - `HOSTINGER_DEPLOY.md` (this file)
 
 Say yes and I will commit them now.
