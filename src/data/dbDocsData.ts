@@ -184,10 +184,10 @@ router.get('/courses', async (req, res, next) => {
 });
 
 2. COURSE CREATION
-Validate request fields on the server and enforce permissions using your Node.js authentication middleware before inserting a course. Use parameterized SQL queries (or your configured ORM) to prevent SQL injection. Store uploaded thumbnails in your configured storage provider and save the resulting URL in thumbnail_url.
+Validate request fields on the server and enforce permissions using your Node.js authentication middleware before inserting a course. Use parameterized SQL queries (or your configured ORM) to pre[...]
 
 3. LEARNING PROGRESS
-Verify that the authenticated student is enrolled in the course and that the lesson belongs to that course. Save lesson completion in lesson_progress, recalculate progress_percent from completed versus total lessons, and issue a certificate only when all required lessons are complete. Use a database transaction to keep related updates consistent.
+Verify that the authenticated student is enrolled in the course and that the lesson belongs to that course. Save lesson completion in lesson_progress, recalculate progress_percent from completed [...]
 
 4. SECURITY NOTES
 - Do not trust role names or user IDs supplied by the browser; derive the user from verified server-side authentication.
@@ -216,7 +216,7 @@ Hostinger Managed Node.JS uses Phusion Passenger under cPanel/hPanel.
 
 2. REDIS CACHING FOR PERSISTENT SESSIONS
 Configure a secure caching client on your backend:
-================ Express code ================
+================  Express code ================
 import redis from 'redis';
 const redisClient = redis.createClient({
     url: process.env.REDIS_URL || 'redis://127.0.0.1:6379'
@@ -279,7 +279,7 @@ DIGITAL MANUFACTURING ACADEMY (DMA) ENTERPRISE SYSTEM ARCHITECTURE
   ├─► Gemini API Connector: Secure proxy safeguarding key tokens, serving custom AI chat bots
   └─► Serialization persistence: Preserves dynamic database changes directly in workspace
   
-[3. Caching & Database Schemas (SaaS Level Frameworks)]
+[3. Caching & Database Schemas (SaaS Level FrameworkS)]
   │
   ├─► SQL Database: fully normalized schemas, cascade deletions, JSONB options arrays
   └─► Cache layer: Redis key state storage for subscription expiration sessions
