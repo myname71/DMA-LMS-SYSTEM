@@ -11,6 +11,19 @@ Database	PostgreSQL via Supabase
 Prerequisites
 Node.js ≥ 20.0.0 and npm ≥ 10.0.0
 A Supabase project (PostgreSQL)
+Database & Auth: Supabase (https://phlniovaulufujeafnwh.supabase.co)
+
+Backend API (Node.js/Express): Deployed on Render (Handles persistent Node processes smoothly).
+
+Frontend (React, Vue, or Static assets): Deployed on Hostinger Shared Hosting / VPS.
+
+
+ Initialize Supabase JS Client for Auth & DB access
+npm install @supabase/supabase-js
+
+# Standard build command for production frontend
+npm run build
+
 
 Fill in .env — all required keys are documented in env.example. The critical ones are:
 Variable	Description
