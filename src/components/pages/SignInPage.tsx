@@ -48,7 +48,17 @@ export default function SignInPage({ onLogin, onNavigateRegister, onNavigateHome
     setError('');
     setLoading(true);
     const result = await onLogin(email, password, remember);
-    if (!result.success) setError(result.error || 'Login failed. Please check your credentials.');
+    if (!result.success) {
+      setError(result.error || 'Login failed. Please check your credentials.');
+    } else {
+      const params = new URLSearchParams(window.location.search);
+      const redirect = params.get('redirect');
+      if (redirect) {
+        window.location.href = redirect;
+        return;
+      }
+      onNavigateHome();
+    }
     setLoading(false);
   };
 
@@ -105,8 +115,6 @@ export default function SignInPage({ onLogin, onNavigateRegister, onNavigateHome
       <div className="absolute bottom-1/3 right-1/4 w-80 h-80 bg-indigo-600/10 rounded-full blur-[100px] pointer-events-none" />
 
       <div className="relative z-10 w-full max-w-md">
-
-        {/* Logo + heading */}
         <div className="text-center mb-8">
           <button onClick={onNavigateHome} className="inline-flex items-center gap-2.5 mb-5 cursor-pointer group">
             <img
@@ -132,10 +140,7 @@ export default function SignInPage({ onLogin, onNavigateRegister, onNavigateHome
           </p>
         </div>
 
-        {/* Card */}
         <div className="p-8 rounded-3xl bg-[#0d1526]/90 border border-slate-800/80 shadow-2xl backdrop-blur-sm space-y-5">
-
-          {/* ── Sign In view ── */}
           {view === 'signin' && (
             <>
               {error && (
@@ -189,7 +194,6 @@ export default function SignInPage({ onLogin, onNavigateRegister, onNavigateHome
                   </div>
                 </div>
 
-                {/* Remember me */}
                 <div className="flex items-center gap-2 cursor-pointer select-none" onClick={() => setRemember(r => !r)}>
                   <div className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${remember ? 'bg-blue-600 border-blue-500' : 'border-slate-600 bg-white/5 hover:border-slate-400'}`}>
                     {remember && <CheckCircle className="w-3 h-3 text-white" />}
@@ -200,7 +204,7 @@ export default function SignInPage({ onLogin, onNavigateRegister, onNavigateHome
                 <button
                   type="submit"
                   disabled={loading}
-                  className="w-full py-3 rounded-xl bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white font-extrabold text-sm cursor-pointer transition-all shadow-lg shadow-blue-900/30 disabled:opacity-60 flex items-center justify-center gap-2 mt-2"
+                  className="w-full py-3 rounded-xl bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white font-extrabold text-sm cursor-pointer transition-all disabled:opacity-70 disabled:cursor-not-allowed"
                 >
                   {loading ? (
                     <><div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" /> Signing in…</>
@@ -210,7 +214,6 @@ export default function SignInPage({ onLogin, onNavigateRegister, onNavigateHome
                 </button>
               </form>
 
-              {/* Register link */}
               <div className="text-center border-t border-slate-800 pt-4">
                 <p className="text-xs text-slate-500">
                   Don't have an account?{' '}
@@ -222,7 +225,6 @@ export default function SignInPage({ onLogin, onNavigateRegister, onNavigateHome
             </>
           )}
 
-          {/* ── Forgot Password view ── */}
           {view === 'forgot' && (
             <>
               {forgotError && (
@@ -249,7 +251,7 @@ export default function SignInPage({ onLogin, onNavigateRegister, onNavigateHome
                 <button
                   type="submit"
                   disabled={forgotLoading}
-                  className="w-full py-3 rounded-xl bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white font-extrabold text-sm cursor-pointer transition-all shadow-lg shadow-blue-900/30 disabled:opacity-60 flex items-center justify-center gap-2"
+                  className="w-full py-3 rounded-xl bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white font-extrabold text-sm cursor-pointer transition-all disabled:opacity-70 disabled:cursor-not-allowed"
                 >
                   {forgotLoading ? (
                     <><div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" /> Sending…</>
@@ -267,7 +269,6 @@ export default function SignInPage({ onLogin, onNavigateRegister, onNavigateHome
             </>
           )}
 
-          {/* ── Reset Password view ── */}
           {view === 'reset' && (
             <>
               {resetError && (
@@ -316,7 +317,7 @@ export default function SignInPage({ onLogin, onNavigateRegister, onNavigateHome
                 <button
                   type="submit"
                   disabled={resetLoading}
-                  className="w-full py-3 rounded-xl bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white font-extrabold text-sm cursor-pointer transition-all shadow-lg shadow-blue-900/30 disabled:opacity-60 flex items-center justify-center gap-2"
+                  className="w-full py-3 rounded-xl bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white font-extrabold text-sm cursor-pointer transition-all disabled:opacity-70 disabled:cursor-not-allowed"
                 >
                   {resetLoading ? (
                     <><div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" /> Updating…</>
@@ -328,7 +329,6 @@ export default function SignInPage({ onLogin, onNavigateRegister, onNavigateHome
             </>
           )}
 
-          {/* ── Reset Done confirmation ── */}
           {view === 'reset_done' && (
             <>
               <div className="flex flex-col items-center gap-4 py-4 text-center">
@@ -343,14 +343,13 @@ export default function SignInPage({ onLogin, onNavigateRegister, onNavigateHome
 
               <button
                 onClick={() => setView('signin')}
-                className="w-full py-3 rounded-xl bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white font-extrabold text-sm cursor-pointer transition-all flex items-center justify-center gap-2"
+                className="w-full py-3 rounded-xl bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white font-extrabold text-sm cursor-pointer transition-all"
               >
                 Sign In Now <ArrowRight className="w-4 h-4" />
               </button>
             </>
           )}
 
-          {/* ── Forgot Sent confirmation ── */}
           {view === 'forgot_sent' && (
             <>
               <div className="flex flex-col items-center gap-4 py-4 text-center">

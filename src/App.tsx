@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
+import { useLocation } from 'react-router-dom';
 import { 
   CheckCircle, AlertCircle, Award, Compass, Sparkles, Shield,
   BookOpen, Layers, Bot, Database, Calendar, Mail, Phone, MapPin, Loader2, ArrowRight,
@@ -9,6 +10,7 @@ import { getAuthHeaders } from './lib/session';
 import Navigation from './components/Navigation';
 import LandingPage from './components/LandingPage';
 import RepositoryPage from "./components/RepositoryPage";
+import { OAuthConsent } from './pages/OAuthConsent';
 // ── Route-level code splitting ────────────────────────────────────────────────
 // Only the landing shell + navigation load up front; dashboards, the course
 // player, the assessment/certificate modules and the CMS pages are fetched on
@@ -38,6 +40,8 @@ import PricingPage from './components/pages/PricingPage';
 import { DEMO_USERS, GENERAL_FAQS } from './data/coursesData';
 
 export default function App() {
+  const location = useLocation();
+
   // Global States loaded asynchronously from Express Server API
   const [courses, setCourses] = useState<Course[]>([]);
   const [users, setUsers] = useState<User[]>([]);
@@ -620,17 +624,17 @@ export default function App() {
             <div className="space-y-4 mb-12">
               <span className="text-xs font-bold text-[#00aaff] uppercase font-mono tracking-widest block">Syllabus Index</span>
               <h2 className="text-3xl font-extrabold text-[#fff]">Comprehensive Laboratory Categories</h2>
-              <p className="text-slate-400 text-xs max-w-xl">Each sub-category incorporates deep physical models, PLC logic paths, and expert video guides certified by British Council research leads.</p>
+              <p className="text-slate-400 text-xs max-w-xl">Each sub-category incorporates deep physical models, PLC logic paths, and expert video guides certified by British Council research leaders.</p>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {[
                 { title: 'Digital Twin technology', desc: 'Construct highly synced visual CAD assets receiving instantaneous broker telemetry protocols.', icon: '💻', count: '5 modules' },
-                { title: 'Robotics & PLC logics', desc: G_CODE => 'Design ladder schemas, program SIEMENS S7 relays, and compile efficient 6-axis G-Code operations.', icon: '🤖', count: '4 modules' },
+                { title: 'Robotics & PLC logics', desc: 'Design ladder schemas, program SIEMENS S7 relays, and compile efficient 6-axis G-Code operations.', icon: '🤖', count: '4 modules' },
                 { title: 'Smart factory & Casing IoT', desc: 'Deploy mesh MQTT networks, manage packet sizes, and implement sensory power mitigations.', icon: '🏭', count: '6 modules' },
                 { title: '3D Additive Fabrication', desc: 'Master metal FDM, UV resin SLA structures, and thermal layer configurations for advanced polymers.', icon: '🖨️', count: '5 modules' },
                 { title: 'Applied Industrial Analytics', desc: 'Predict motor wear-and-tear thresholds, compute failure indices, and design diagnostic dashboards.', icon: '📊', count: '4 modules' },
-                { title: 'Green factory circular economy', desc: 'Formulate energy reduction matrices and manage lifecycle emission limits inside carbon-audited plants.', icon: '♻️', count: '3 modules' }
+                { title: 'Green factory circular economy', desc: 'Formulate energy reduction matrices and manage lifecycle emission limits inside carbon-audited plants.', icon: '♻️', count: '4 modules' },
               ].map((c, idx) => (
                 <div key={idx} className="p-6 rounded-2xl border border-slate-800 bg-[#111827] shadow hover:border-[#00aaff]/25 transition-all text-left space-y-4 group">
                   <div className="text-3xl group-hover:scale-110 transition-transform duration-500">{c.icon}</div>
@@ -712,15 +716,15 @@ export default function App() {
                   <form onSubmit={(e) => { e.preventDefault(); setContactDone(true); }} className="space-y-4">
                     <div>
                       <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Full Name</label>
-                      <input type="text" value={contactName} onChange={e => setContactName(e.target.value)} required placeholder="Alex Rivera" className="w-full text-xs p-3 rounded-lg bg-slate-900 border border-slate-800 text-white" />
+                      <input type="text" value={contactName} onChange={e => setContactName(e.target.value)} required placeholder="Alex Rivera" className="w-full text-xs p-3 rounded-lg bg-slate-900/80 border border-slate-700 text-white placeholder-slate-500" />
                     </div>
                     <div>
                       <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Email Address</label>
-                      <input type="email" value={contactEmail} onChange={e => setContactEmail(e.target.value)} required placeholder="alex@gmail.com" className="w-full text-xs p-3 rounded-lg bg-slate-900 border border-slate-800 text-white" />
+                      <input type="email" value={contactEmail} onChange={e => setContactEmail(e.target.value)} required placeholder="alex@gmail.com" className="w-full text-xs p-3 rounded-lg bg-slate-900/80 border border-slate-700 text-white placeholder-slate-500" />
                     </div>
                     <div>
                       <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Instructions or Query Topic</label>
-                      <textarea value={contactMsg} onChange={e => setContactMsg(e.target.value)} required placeholder="Ask about academic credits, specific classes, or joint grants..." rows={4} className="w-full text-xs p-3 rounded-lg bg-slate-900 border border-slate-800 text-white" />
+                      <textarea value={contactMsg} onChange={e => setContactMsg(e.target.value)} required placeholder="Ask about academic credits, specific classes, or joint grants..." rows={4} className="w-full text-xs p-3 rounded-lg bg-slate-900/80 border border-slate-700 text-white placeholder-slate-500 resize-none" />
                     </div>
                     <button type="submit" className="w-full py-2.5 rounded bg-gradient-to-r from-[#0066ff] to-[#00aaff] text-white text-xs font-bold font-sans cursor-pointer">
                       Send Core Query
@@ -886,9 +890,34 @@ export default function App() {
         );
 
       default:
-        return <LandingPage courses={courses} onEnroll={handleEnrollUser} onLaunchPlayer={(course) => setPlayerCourse(course)} onExploreCategories={() => setCurrentPage('categories')} onExploreCourses={() => setCurrentPage('courses')} setRegisterOpen={setRegisterOpen} setLoginOpen={setLoginOpen} cmsContent={cmsContent} onSelectCourse={(c) => setCurrentPage('courses')} onResumeCourse={(courseId) => { const found = courses.find(c => c.id === courseId); if (found) setPlayerCourse(found); }} />;
+        return <LandingPage courses={courses} onEnroll={handleEnrollUser} onLaunchPlayer={(course) => setPlayerCourse(course)} onExploreCategories={() => setCurrentPage('categories')} onExploreCourses={() => setCurrentPage('courses')} setRegisterOpen={setRegisterOpen} setLoginOpen={setLoginOpen} cmsContent={cmsContent} onSelectCourse={(c) => { triggerToast(`Selected: ${c.title}. Review modules below!`); setCurrentPage('courses'); }} onResumeCourse={(courseId) => { const found = courses.find(c => c.id === courseId); if (found) setPlayerCourse(found); }} />;
     }
   };
+
+  if (location.pathname === '/oauth/consent') {
+    return <OAuthConsent />;
+  }
+
+  if (location.pathname === '/login' || location.pathname === '/signin') {
+    return (
+      <SignInPage
+        onLogin={performLogin}
+        onNavigateRegister={() => { window.location.href = '/register'; }}
+        onNavigateHome={() => { window.location.href = '/'; }}
+      />
+    );
+  }
+
+  if (location.pathname === '/register') {
+    return (
+      <RegisterPage
+        onSuccess={handleRegisterSuccess}
+        onNavigateLogin={() => { window.location.href = '/login'; }}
+        onNavigateHome={() => { window.location.href = '/'; }}
+        triggerToast={triggerToast}
+      />
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#020617] text-slate-100 flex flex-col justify-between font-sans relative antialiased overflow-x-hidden">
@@ -1005,7 +1034,7 @@ export default function App() {
             ) : (
               <button
                 onClick={handleInstallApp}
-                className="flex items-center gap-2.5 px-7 py-3.5 rounded-xl bg-blue-600 hover:bg-blue-500 active:scale-95 transition-all text-white font-extrabold text-sm shadow-lg shadow-blue-900/50 cursor-pointer"
+                className="flex items-center gap-2.5 px-7 py-3.5 rounded-xl bg-blue-600 hover:bg-blue-500 active:scale-95 transition-all text-white font-extrabold text-sm shadow-lg shadow-blue-900/40"
               >
                 <Smartphone className="w-4 h-4" />
                 Install App
@@ -1175,7 +1204,7 @@ export default function App() {
                 </button>
               </div>
 
-              <button type="submit" className="w-full py-2.5 rounded bg-blue-600 hover:bg-blue-500 text-white font-extrabold text-xs uppercase tracking-wide cursor-pointer transition-colors shadow-lg shadow-blue-650/20">
+              <button type="submit" className="w-full py-2.5 rounded bg-blue-600 hover:bg-blue-500 text-white font-extrabold text-xs uppercase tracking-wide cursor-pointer transition-colors shadow-lg shadow-blue-900/50">
                 Sign In to Academy
               </button>
             </form>
@@ -1196,7 +1225,7 @@ export default function App() {
             </div>
 
             {regSuccess ? (
-              <div className="p-4 bg-teal-500/10 border border-teal-500/20 rounded-xl text-teal-405 text-xs space-y-1 shadow">
+              <div className="p-4 bg-teal-500/10 border border-teal-500/20 rounded-xl text-teal-400 text-xs space-y-1 shadow">
                 <div className="font-bold flex items-center gap-1">
                   <CheckCircle className="w-4 h-4 text-teal-400" />
                   <span>Success! Account Built</span>
@@ -1241,7 +1270,7 @@ export default function App() {
 
                 <p className="text-[10px] text-slate-500 leading-normal">Note: Instructors require administrative verification before course publishing capability activates.</p>
 
-                <button type="submit" className="w-full py-2.5 rounded bg-blue-600 hover:bg-blue-500 text-white font-extrabold text-xs uppercase cursor-pointer transition-colors shadow-lg shadow-blue-650/20">
+                <button type="submit" className="w-full py-2.5 rounded bg-blue-600 hover:bg-blue-500 text-white font-extrabold text-xs uppercase cursor-pointer transition-colors shadow-lg shadow-blue-900/50">
                   Generate Academic Token
                 </button>
               </form>

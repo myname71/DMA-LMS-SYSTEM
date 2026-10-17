@@ -26,7 +26,7 @@
     "@tailwindcss/vite": "^4.1.14",
     "@types/nodemailer": "^8.0.1",
     "@vitejs/plugin-react": "^5.0.4",
-    "bcryptjs": "^3.0.3",
+    "bcryptjs": "^0.3.0",
     "cookie-parser": "^1.4.7",
     "dotenv": "^17.2.3",
     "express": "^4.21.2",
@@ -38,11 +38,12 @@
     "nodemailer": "^10.0.13",
     "prisma": "^5.22.0",
     "react": "^19.0.1",
-    "react-dom": "^19.0.1"
+    "react-dom": "^19.0.1",
+    "react-router-dom": "^7.0.0"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",
-    "@types/cookie-parser": "^1.4.10",
+    "@types/cookie-parser": "^2.4.10",
     "@types/express": "^4.17.21",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^22.14.0",
