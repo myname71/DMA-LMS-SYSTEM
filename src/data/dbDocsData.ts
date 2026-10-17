@@ -19,7 +19,7 @@ CREATE TABLE users (
     email_verified_at TIMESTAMP NULL,
     password_hash VARCHAR(255) NOT NULL,
     role_id INT REFERENCES roles(id) ON DELETE SET NULL,
-    avatar_url VARCHAR(255) DEFAULT 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
+    avatar_url VARCHAR(255) DEFAULT '*avatar*',
     subscription_plan VARCHAR(50) DEFAULT 'none',
     subscription_expires_at TIMESTAMP NULL,
     is_approved BOOLEAN DEFAULT TRUE, -- False for instructors until admin approval
@@ -47,7 +47,7 @@ CREATE TABLE categories (
     name VARCHAR(100) UNIQUE NOT NULL,
     slug VARCHAR(100) NOT NULL,
     description TEXT,
-    image_url VARCHAR(255) DEFAULT 'https://images.unsplash.com/photo-1611532736597'
+    image_url VARCHAR(255) DEFAULT '*avatar*'
 );
 
 6. COURSES TABLE
