@@ -1,7 +1,7 @@
 export const POSTGRES_SCHEMA = `
 DIGITAL MANUFACTURING ACADEMY 
 POSTGRESQL COMPLETE PRODUCTION SCHEMA
-
+ 
 1. ROLES TABLE
 CREATE TABLE roles (
     id SERIAL PRIMARY KEY,
@@ -10,7 +10,7 @@ CREATE TABLE roles (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
-
+ 
 2. USERS TABLE
 CREATE TABLE users (
     id SERIAL PRIMARY KEY,
@@ -26,21 +26,21 @@ CREATE TABLE users (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
-
+ 
 3. PERMISSIONS TABLE
 CREATE TABLE permissions (
     id SERIAL PRIMARY KEY,
     slug VARCHAR(100) UNIQUE NOT NULL,
     description TEXT
 );
-
+ 
 4. ROLE_HAS_PERMISSIONS CROSS JOIN TABLE
 CREATE TABLE role_permissions (
     role_id INT REFERENCES roles(id) ON DELETE CASCADE,
     permission_id INT REFERENCES permissions(id) ON DELETE CASCADE,
     PRIMARY KEY (role_id, permission_id)
 );
-
+ 
 5. COURSE CATEGORIES TABLE
 CREATE TABLE categories (
     id SERIAL PRIMARY KEY,
@@ -49,7 +49,7 @@ CREATE TABLE categories (
     description TEXT,
     image_url VARCHAR(255) DEFAULT '*avatar*'
 );
-
+ 
 6. COURSES TABLE
 CREATE TABLE courses (
     id SERIAL PRIMARY KEY,
@@ -67,7 +67,7 @@ CREATE TABLE courses (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
-
+ 
 7. LESSONS TABLE (Structured Sections)
 CREATE TABLE lessons (
     id SERIAL PRIMARY KEY,
@@ -80,7 +80,7 @@ CREATE TABLE lessons (
     sort_order INT DEFAULT 0,
     is_required BOOLEAN DEFAULT TRUE
 );
-
+ 
 8. COURSE ENROLLMENTS TABLE 
 CREATE TABLE enrollments (
     id SERIAL PRIMARY KEY,
@@ -91,7 +91,7 @@ CREATE TABLE enrollments (
     completed_at TIMESTAMP DEFAULT NULL,
     UNIQUE (user_id, course_id)
 );
-
+ 
 -- 9. LESSON_PROGRESS TRACKER (Real-Time Completion)
 CREATE TABLE lesson_progress (
     id SERIAL PRIMARY KEY,
@@ -100,7 +100,7 @@ CREATE TABLE lesson_progress (
     completed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     UNIQUE (enrollment_id, lesson_id)
 );
-
+ 
 10. QUIZZES TABLE
 CREATE TABLE quizzes (
     id SERIAL PRIMARY KEY,
@@ -108,7 +108,7 @@ CREATE TABLE quizzes (
     title VARCHAR(255) NOT NULL,
     passing_score_percent INT DEFAULT 80
 );
-
+ 
 11. QUIZ QUESTIONS TABLE
 CREATE TABLE quiz_questions (
     id SERIAL PRIMARY KEY,
@@ -117,7 +117,7 @@ CREATE TABLE quiz_questions (
     options JSONB NOT NULL, -- Binary JSON options array
     correct_option_index INT NOT NULL
 );
-
+ 
 12. CERTIFICATES TABLE
 CREATE TABLE certificates (
     id SERIAL PRIMARY KEY,
@@ -125,7 +125,7 @@ CREATE TABLE certificates (
     credential_uuid UUID UNIQUE DEFAULT gen_random_uuid(),
     issued_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
-
+ 
 13. ASSIGNMENTS TABLE
 CREATE TABLE assignments (
     id SERIAL PRIMARY KEY,
@@ -135,7 +135,7 @@ CREATE TABLE assignments (
     max_score INT DEFAULT 100,
     due_date TIMESTAMP NULL
 );
-
+ 
 14. ASSIGNMENT SUBMISSIONS TABLE
 CREATE TABLE assignment_submissions (
     id SERIAL PRIMARY KEY,
@@ -147,7 +147,7 @@ CREATE TABLE assignment_submissions (
     feedback TEXT,
     submitted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
-
+ 
 15. PAYMENTS & SUBSCRIPTIONS RECORD (SaaS Module)
 CREATE TABLE payments (
     id SERIAL PRIMARY KEY,
@@ -158,13 +158,13 @@ CREATE TABLE payments (
     subscription_plan VARCHAR(50), -- basic, pro, enterprise
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
-
-
+ 
+ 
 NODE.JS / EXPRESS API EXAMPLES
-
+ 
 1. GET PUBLISHED COURSES
 Example Express route (adapt the query to your database client):
-
+ 
 router.get('/courses', async (req, res, next) => {
   try {
     const category = req.query.category;
@@ -176,35 +176,35 @@ router.get('/courses', async (req, res, next) => {
       : await db.query(
           'SELECT * FROM courses WHERE is_published = TRUE'
         );
-
+ 
     res.status(200).json({ status: 'success', courses: result.rows });
   } catch (error) {
     next(error);
   }
 });
-
+ 
 2. COURSE CREATION
 Validate request fields on the server and enforce permissions using your Node.js authentication middleware before inserting a course. Use parameterized SQL queries (or your configured ORM) to pre[...]
-
+ 
 3. LEARNING PROGRESS
 Verify that the authenticated student is enrolled in the course and that the lesson belongs to that course. Save lesson completion in lesson_progress, recalculate progress_percent from completed [...]
-
+ 
 4. SECURITY NOTES
 - Do not trust role names or user IDs supplied by the browser; derive the user from verified server-side authentication.
 - Validate and authorize every course, lesson, enrollment, and certificate operation.
 - Never store plaintext passwords; use a suitable password-hashing library.
 - Keep database credentials and JWT secrets in server-side environment variables.
-
+ 
 `;
-
+ 
 export const HOSTING_OPTIMIZATION = `
 HOSTINGER MANAGED NODE.JS APPS & SHARED HOSTING OPTIMIZATION GUIDE
-
+ 
 1. CONFIGURING PASSENGERS / REVERSE PROXY
 Hostinger Managed Node.JS uses Phusion Passenger under cPanel/hPanel.
 * Ensure your server entry point binds to process.env.PORT, but defaults to 3000.
 * Create a file named 'app.js' or '.htaccess' inside your root folder:
-
+ 
  .htaccess :
   <IfModule mod_rewrite.c>
     RewriteEngine On
@@ -213,7 +213,7 @@ Hostinger Managed Node.JS uses Phusion Passenger under cPanel/hPanel.
     RewriteCond %{REQUEST_FILENAME} !-d
     RewriteRule ^(.*)$ http://127.0.0.1:3000/$1 [P,L]
   </IfModule>
-
+ 
 2. REDIS CACHING FOR PERSISTENT SESSIONS
 Configure a secure caching client on your backend:
 ================  Express code ================
@@ -222,48 +222,48 @@ const redisClient = redis.createClient({
     url: process.env.REDIS_URL || 'redis://127.0.0.1:6379'
 });
 redisClient.on('error', err => console.log('Redis Cache Error', err));
-
+ 
 3. SHARED MEMORY MITIGATIONS (HOSTINGER CPU THROTTLING)
 * Avoid run-time Typescript compiling directly on shared hosting CPU kernels!
 * Compile modules beforehand utilizing our production script:
   $ npm run build
   This compiles all React paths into high efficiency static HTML index pages and CJS chunks, completely preventing continuous Gulp/Vite watching overhead on small CPU tier limits memory.
 `;
-
+ 
 export const WINDOWS_LOCAL_SETUP = `
 To set up this Enterprise LMS on your personal machine or factory intranet workstation:
-
+ 
 STEP 1: INSTALL PRE-REQUISITES
 1. Node.JS (Ver 20+ LTS recommended) from https://nodejs.org/
 2. PostgreSQL 15+ database (Supabase PostgreSQL is supported).
 3. Git Bash command line interface helper.
-
+ 
 STEP 2: DIRECTORY SETUP & ENVIRONMENT CLONING
 Unzip the project file or pull using Git to a target workspace folder, e.g., 'C:\\digital-manufacturing-academy\\'
-
+ 
 STEP 3: SECURING ENVIRONMENT VALUES (.ENV)
 Copy '.env.example' into '.env' inside the root folder:
   $ copy .env.example .env
 Fill in your Postgres connection credentials and your secure Google Gemini keys:
   GEMINI_API_KEY="your_secure_api_key"
-
+ 
 STEP 4: DEPENDENCY PROVISIONING
 In Git Bash or cmd prompt run:
   $ npm install
-
+ 
 STEP 5: RUN DEVELOPMENT DEV MODE
 Launch the full stack application on port 3000 immediately:
   $ npm run dev
-
+ 
 STEP 6: COMPILE Standalone Production Package
 To test ready-to-deploy IIS bundles:
   $ npm run build
   This generates 'dist/index.html' and 'dist/server.cjs' for rapid delivery.
 `;
-
+ 
 export const ARCHITECTURE_LANDSCAPE = `
 DIGITAL MANUFACTURING ACADEMY (DMA) ENTERPRISE SYSTEM ARCHITECTURE
-
+ 
 [1. Presentation Layer (Vite + React Canvas)]
   │
   ├─► Interactive Space Grotesk Displays & Glassmorphic Hero
@@ -284,3 +284,4 @@ DIGITAL MANUFACTURING ACADEMY (DMA) ENTERPRISE SYSTEM ARCHITECTURE
   ├─► SQL Database: fully normalized schemas, cascade deletions, JSONB options arrays
   └─► Cache layer: Redis key state storage for subscription expiration sessions
 `;
+ 
